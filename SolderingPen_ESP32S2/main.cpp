@@ -58,10 +58,12 @@ uint16_t accels[32][3];
 uint8_t accelIndex = 0;
 #define ACCEL_SAMPLES 32
 
+// Define aggressive and conservative PID tuning parameters
 // 定义积极和保守的PID调整参数
 double aggKp = 11, aggKi = 0.5, aggKd = 1;
 double consKp = 11, consKi = 3, consKd = 5;
 
+// Default value can be changed by user and stored in EEPROM
 // 用户可以更改并存储在EEPROM中的默认值
 uint16_t DefaultTemp = TEMP_DEFAULT;
 uint16_t SleepTemp = TEMP_SLEEP;
@@ -77,6 +79,7 @@ bool QCEnable = QC_ENABLE;
 uint8_t WAKEUPthreshold = WAKEUP_THRESHOLD;
 bool restore_default_config = false;
 
+// Default value for T12
 // T12的默认值
 uint16_t CalTemp[TIPMAX][4] = {TEMP200, TEMP280, TEMP360, TEMPCHP};
 char TipName[TIPMAX][TIPNAMELENGTH] = {TIPNAME};
@@ -329,7 +332,7 @@ void loop() {
   Thermostat();  // heater control 加热器控制
   MainScreen();  // updates the main page on the OLED 刷新OLED主界面
   lastMillis = millis() - timems;
-  Serial.println(lastMillis);
+  //Serial.println(lastMillis);
 }
 
 // check rotary encoder; set temperature, toggle boost mode, enter setup menu

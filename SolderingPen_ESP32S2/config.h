@@ -13,7 +13,7 @@
 //typedef u8g2_uint_t u8g_uint_t;
 #define SCREEN_OFFSET     2
 
-// 旋转编码器的类型
+// Type of rotary encoders / 旋转编码器的类型
 #define ROTARY_TYPE       0     // 0: 2 increments/step; 1: 4 increments/step (default)
 #define BUTTON_DELAY      5
 
@@ -34,18 +34,19 @@
 #define PD_CFG_1          17
 #define PD_CFG_2          18
 
+// Default temperature control value (recommended soldering temperature: 300~380°C)
 // 默认温度控制值(推荐焊接温度:300~380°C)
 #define TEMP_MIN          50    // 最小温度
 #define TEMP_MAX          450   // 最大温度
 #define TEMP_DEFAULT      260   // 默认温度
 #define TEMP_SLEEP        150   // 休眠温度
 #define TEMP_BOOST        50    // 升温步进
-#define TEMP_STEP         10    // 旋转编码器温度变化步进
+#define TEMP_STEP         10    // temperature change step / 旋转编码器温度变化步进
 #define POWER_LIMIT_15    170   // 功率限制
 #define POWER_LIMIT_20    255   // 功率限制
 #define POWER_LIMIT_20_2  127   // 功率限制
 
-// 默认的T12烙铁头温度校准值
+// Default tip temperature calibration value / 默认的T12烙铁头温度校准值
 #define TEMP200           200   // temperature at ADC = 200 
 #define TEMP280           280   // temperature at ADC = 280
 #define TEMP360           360   // temperature at ADC = 360 
@@ -55,16 +56,16 @@
 #define TIPNAMELENGTH     6     // max length of tip names (including termination)
 #define TIPNAME           "PTS  " // default tip name
 
-// 默认的定时器值 (0 = 禁用)
-#define TIME2SLEEP        60    // 几秒钟后进入睡眠模式
-#define TIME2OFF          5     // 几分钟后就要关闭加热器了
-#define TIMEOFBOOST       60    // 停留在加热模式多少秒
-#define WAKEUP_THRESHOLD  10    // MPU 震动检测精度，数值越小，越灵敏
+// Default timer value (0 = disabled) / 默认的定时器值 (0 = 禁用)
+#define TIME2SLEEP        60    // sleep mode timer, seconds / 几秒钟后进入睡眠模式
+#define TIME2OFF          5     // off timer, minutes / 几分钟后就要关闭加热器了
+#define TIMEOFBOOST       60    // boos mode duration / 停留在加热模式多少秒
+#define WAKEUP_THRESHOLD  10    // MPU vibration detection accuracy, the smaller the value, the more sensitive it is / MPU 震动检测精度，数值越小，越灵敏
 
 // Control values
-#define TIME2SETTLE       5000  // 以微秒为单位的时间允许OpAmp输出稳定
-#define TIME2SETTLE_20V   2000  // 以微秒为单位的时间允许OpAmp输出稳定
-#define SMOOTHIE          0.05  // OpAmp输出平滑系数 (1=无平滑; 默认：0.05)
+#define TIME2SETTLE       5000  // The time in microseconds allowed for the OpAmp output to stabilize / 以微秒为单位的时间允许OpAmp输出稳定
+#define TIME2SETTLE_20V   2000  // The time in microseconds allowed for the OpAmp output to stabilize / 以微秒为单位的时间允许OpAmp输出稳定
+#define SMOOTHIE          0.05  // OpAmp output smoothing coefficient (1=no smoothing; default: 0.05) / OpAmp输出平滑系数 (1=无平滑; 默认：0.05)
 #define PID_ENABLE        false // enable PID control
 #define BEEP_ENABLE       true  // enable/disable buzzer
 #define VOLTAGE_VALUE     3     // 电压值
