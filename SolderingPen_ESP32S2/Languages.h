@@ -1,3 +1,4 @@
+#pragma once
 // 菜单项
 const uint8_t language_types = 3;
 //                                            "温控类型",   "溫控類型",   "Control Type",

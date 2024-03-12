@@ -1,3 +1,5 @@
+#pragma once
+
 // Firmware version
 #define VERSION "v4.5.3" //20240130
 #define VERSION_NUM 422
