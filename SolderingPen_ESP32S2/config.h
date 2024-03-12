@@ -27,12 +27,17 @@
 #define CONTROL_PIN       5     // heater MOSFET PWM control 加热器MOSFET PWM控制
 #define CONTROL_CHANNEL   2     // PWM channel
 #define CONTROL_FREQ      200   // PWM frequency
-#define CONTROL_FREQ_20V  1000  // PWM frequency for 20V
+#define CONTROL_HIGHFREQ  1000  // PWM frequency for 20V/50% PWM mode
 #define CONTROL_RES       8     // PWM resolution
 
+// CH224K USB PD chip pins connection
+// https://components101.com/sites/default/files/component_datasheet/WCH_CH224K_ENG.pdf
 #define PD_CFG_0          16
 #define PD_CFG_1          17
 #define PD_CFG_2          18
+
+#define QC_DP_PIN         14
+#define QC_DM_PIN         13
 
 // Default temperature control value (recommended soldering temperature: 300~380°C)
 // 默认温度控制值(推荐焊接温度:300~380°C)

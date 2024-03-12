@@ -12,18 +12,15 @@
 #include "USB.h"
 #include "UtilsEEPROM.h"
 
-QC3Control QC(14, 13);
-// QC.set12V();
+QC3Control QC(QC_DP_PIN, QC_DM_PIN);
 
 #include <U8g2lib.h>  // https://github.com/olikraus/u8g2
 // font
 #include "PTS200_16.h"
 
+// https://github.com/madhephaestus/ESP32AnalogRead
+#include <ESP32AnalogRead.h>
 
-// #include<analogWrite.h>
-#include <ESP32AnalogRead.h>  //Click here to get the library: http://librarymanager/All#ESP32AnalogRead
-
-#include "esp_adc_cal.h"
 
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
@@ -161,20 +158,23 @@ Button2 btn;
 float limit = 0.0;
 
 void setup() {
+  // set PD pins
+  pinMode(PD_CFG_0, OUTPUT);
+  pinMode(PD_CFG_1, OUTPUT);
+  pinMode(PD_CFG_2, OUTPUT);
+
+  // start from default 5 volts
+  digitalWrite(PD_CFG_0, HIGH);
+/*
+  // request 20V configuration from PD
   digitalWrite(PD_CFG_0, LOW);
   digitalWrite(PD_CFG_1, HIGH);
   digitalWrite(PD_CFG_2, LOW);
+*/
 
-  // pinMode(14, INPUT);
-  // pinMode(13, INPUT);
-  // QC.set12V();
   Serial.begin(115200);
   Serial.setTxTimeoutMs(0);
-  // delay(5000);
 
-  //  analogSetAttenuation(ADC_11db);
-  //  vref_adc0 = calibrate_adc(ADC_UNIT_1, (adc_atten_t)ADC1_CHANNEL_5);
-  //  vref_adc1 = calibrate_adc(ADC_UNIT_2, (adc_atten_t)ADC2_CHANNEL_9);
   adc_sensor.attach(SENSOR_PIN);
   adc_vin.attach(VIN_PIN);
 
@@ -203,15 +203,15 @@ void setup() {
   //    delay(100);
   //  }
   init_EEPROM();
+
+  // if all 3 buttons are pressed on boot, reset EEPROM configuration to defaults
   if (digitalRead(BUTTON_P_PIN) == LOW && digitalRead(BUTTON_N_PIN) == LOW &&
       digitalRead(BUTTON_PIN) == HIGH) {
     write_default_EEPROM();
   }
-  getEEPROM();
 
-  pinMode(PD_CFG_0, OUTPUT);
-  pinMode(PD_CFG_1, OUTPUT);
-  pinMode(PD_CFG_2, OUTPUT);
+  // load configuration from eeprom
+  getEEPROM();
 
   if (QCEnable) {
     QC.begin();
@@ -237,6 +237,7 @@ void setup() {
     }
   }
 
+  // request configured voltage via PD trigger
   PD_Update();
 
   // read supply voltages in mV 以mV为单位读取电源电压
@@ -581,8 +582,7 @@ void SENSORCheck() {
     ChangeTipScreen();  // show tip selection screen 显示烙铁头选择屏幕
     update_EEPROM();     // update setting in EEPROM EEPROM的更新设置
     handleMoved = true;  // reset all timers 重置所有计时器
-    RawTemp = denoiseAnalog(
-        SENSOR_PIN);  // restart temp smooth algorithm 重启临时平滑算法
+    RawTemp = denoiseAnalog(SENSOR_PIN);  // restart temp smooth algorithm 重启临时平滑算法
     c0 = LOW;         // switch must be released 必须松开开关
     setRotary(TEMP_MIN, TEMP_MAX, TEMP_STEP,
               SetTemp);  // reset rotary encoder 重置旋转编码器
@@ -611,7 +611,7 @@ void Thermostat() {
   else if (inSleepMode)
     Setpoint = SleepTemp;
   else if (inBoostMode) {
-    Setpoint = constrain(SetTemp + BoostTemp, 0, 450);
+    Setpoint = constrain(SetTemp + BoostTemp, 0, TEMP_MAX);
   } else
     Setpoint = SetTemp;
 
@@ -1460,37 +1460,36 @@ void Button_loop() {
 
 void PD_Update() {
   switch (VoltageValue) {
+    // 9 volts
     case 0: {
       digitalWrite(PD_CFG_0, LOW);
       digitalWrite(PD_CFG_1, LOW);
       digitalWrite(PD_CFG_2, LOW);
     } break;
+    // 12 volts
     case 1: {
       digitalWrite(PD_CFG_0, LOW);
       digitalWrite(PD_CFG_1, LOW);
       digitalWrite(PD_CFG_2, HIGH);
     } break;
+    // 15 volts
     case 2: {
       digitalWrite(PD_CFG_0, LOW);
       digitalWrite(PD_CFG_1, HIGH);
       digitalWrite(PD_CFG_2, HIGH);
     } break;
-    case 3: {
-      digitalWrite(PD_CFG_0, LOW);
-      digitalWrite(PD_CFG_1, HIGH);
-      digitalWrite(PD_CFG_2, LOW);
-    } break;
+    // 20 volts
+    case 3:
     case 4: {
       digitalWrite(PD_CFG_0, LOW);
       digitalWrite(PD_CFG_1, HIGH);
       digitalWrite(PD_CFG_2, LOW);
     } break;
-    default:
-      break;
+    default:;
   }
 
   if (VoltageValue == 3) {
-    ledcSetup(CONTROL_CHANNEL, CONTROL_FREQ_20V, CONTROL_RES);
+    ledcSetup(CONTROL_CHANNEL, CONTROL_HIGHFREQ, CONTROL_RES);
   } else {
     ledcSetup(CONTROL_CHANNEL, CONTROL_FREQ, CONTROL_RES);
   }
