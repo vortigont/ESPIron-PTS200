@@ -93,8 +93,11 @@ volatile bool handleMoved;
 
 // Variables for temperature control 温度控制变量
 uint16_t SetTemp, ShowTemp, gap, Step;
-//double Input, Output, Setpoint, RawTemp, CurrentTemp, ChipTemp;
-double RawTemp, ChipTemp;
+//double Input, Output, Setpoint, RawTemp, CurrentTemp, accellTemp;
+// tip smoothed temperature
+float RawTemp;
+// accelerometer chip temperature
+float accellTemp;
 long CurrentTemp;
 int16_t Input, Output, Setpoint;
 
@@ -302,8 +305,8 @@ void setup() {
   // accel.setDataRate(LIS2DH12_ODR_400Hz);
   // lis2dh12_fifo_mode_set(&(accel.dev_ctx), LIS2DH12_BYPASS_MODE);
 
-  ChipTemp = getChipTemp();
-  lastSENSORTmp = getMPUTemp();
+  accellTemp = getAccellTemp();
+  lastSENSORTmp = getAccellTemp();
   u8g2.initDisplay();
   u8g2.begin();
   u8g2.sendF("ca", 0xa8, 0x3f);
@@ -747,7 +750,7 @@ void MainScreen() {
     if (MainScrType) {
       // draw current tip and input voltage 绘制当前烙铁头及输入电压
       float fVin = (float)Vin / 1000;  // convert mv in V
-      newSENSORTmp = newSENSORTmp + 0.01 * getMPUTemp();
+      newSENSORTmp = newSENSORTmp + 0.01 * getAccellTemp();
       SENSORTmpTime++;
       if (SENSORTmpTime >= 100) {
         lastSENSORTmp = newSENSORTmp;
@@ -1084,7 +1087,7 @@ void InfoScreen() {
   do {
     Vin = getVIN();                  // read supply voltage
     float fVin = (float)Vin / 1000;  // convert mv in V
-    float fTmp = getChipTemp();      // read cold junction temperature
+    float fTmp = getAccellTemp();      // read cold junction temperature
     u8g2.firstPage();
     do {
       u8g2.setFont(PTS200_16);
@@ -1223,7 +1226,7 @@ void CalibrationScreen() {
   } else {
     delayMicroseconds(TIME2SETTLE);  // wait for voltage to settle 等待电压稳定
   }
-  CalTempNew[3] = getChipTemp();  // read chip temperature 读芯片温度
+  CalTempNew[3] = getAccellTemp();  // read chip temperature 读芯片温度
   if ((CalTempNew[0] + 10 < CalTempNew[1]) &&
       (CalTempNew[1] + 10 < CalTempNew[2])) {
     if (MenuScreen(StoreItems, sizeof(StoreItems), 0)) {
@@ -1349,28 +1352,14 @@ uint16_t denoiseAnalog(byte port) {
   return (result / 4);  // devide by 32 and return value 除以32并返回值
 }
 
-// 读取SENSOR内部温度
-double getChipTemp() {
-#if defined(MPU)
-  mpu6050.update();
-  int16_t Temp = mpu6050.getTemp();
-#elif defined(LIS)
-  int16_t Temp = accel.getTemperature();
-#endif
-
-  return Temp;
-}
-
 // get LIS/MPU temperature 获取LIS/MPU的温度
-float getMPUTemp() {
+float getAccellTemp() {
 #if defined(MPU)
   mpu6050.update();
-  int16_t Temp = mpu6050.getTemp();
+  return mpu6050.getTemp();
 #elif defined(LIS)
-  int16_t Temp = accel.getTemperature();
+  return accel.getTemperature();
 #endif
-
-  return Temp;
 }
 
 // get supply voltage in mV 得到以mV为单位的电源电压

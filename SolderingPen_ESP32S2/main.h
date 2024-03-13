@@ -40,14 +40,7 @@ void beep();
  * 读取SENSOR内部温度
  * @return double 
  */
-double getChipTemp();
-
-/**
- * @brief get LIS/MPU temperature
- * 获取LIS/MPU的温度
- * @return float 
- */
-float getMPUTemp();
+float getAccellTemp();
 
 /**
  * @brief check rotary encoder; set temperature, toggle boost mode, enter setup menu// accordingly
