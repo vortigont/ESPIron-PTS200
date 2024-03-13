@@ -17,7 +17,7 @@ uint16_t getVIN();
  *  VP+_Ru = 100k, Rd_GND = 1K
  * 
  */
-uint16_t denoiseAnalog(byte port);
+float denoiseAnalog(byte port);
 
 // calculates real temperature value according to ADC reading and calibration values
 // 根据ADC读数和校准值，计算出真实的温度值

@@ -43,6 +43,7 @@
 // 默认温度控制值(推荐焊接温度:300~380°C)
 #define TEMP_MIN          50    // 最小温度
 #define TEMP_MAX          450   // 最大温度
+#define TEMP_NOTIP        500   // virtual temperature when tip is not installed
 #define TEMP_DEFAULT      260   // 默认温度
 #define TEMP_SLEEP        150   // 休眠温度
 #define TEMP_BOOST        50    // 升温步进
@@ -70,7 +71,7 @@
 // Control values
 #define TIME2SETTLE       5000  // The time in microseconds allowed for the OpAmp output to stabilize / 以微秒为单位的时间允许OpAmp输出稳定
 #define TIME2SETTLE_20V   2000  // The time in microseconds allowed for the OpAmp output to stabilize / 以微秒为单位的时间允许OpAmp输出稳定
-#define SMOOTHIE          0.05  // OpAmp output smoothing coefficient (1=no smoothing; default: 0.05) / OpAmp输出平滑系数 (1=无平滑; 默认：0.05)
+#define SMOOTHIE          0.2   // OpAmp output smoothing coefficient (1=no smoothing; default: 0.05) / OpAmp输出平滑系数 (1=无平滑; 默认：0.05)
 #define PID_ENABLE        true  // enable PID control
 #define PID_ENABLE_GAP    25    // temperature difference when PID algo should be activated
 #define BEEP_ENABLE       true  // enable/disable buzzer
