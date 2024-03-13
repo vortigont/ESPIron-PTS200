@@ -70,6 +70,12 @@ void SLEEPCheck();
 void SENSORCheck();
 
 /**
+ * @brief measure tip temperature
+ * this will disable PWM!!!
+ */
+void measureTipTemp();
+
+/**
  * @brief input value screen
  * 输入值屏幕
  * 

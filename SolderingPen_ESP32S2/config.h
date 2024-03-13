@@ -71,7 +71,8 @@
 #define TIME2SETTLE       5000  // The time in microseconds allowed for the OpAmp output to stabilize / 以微秒为单位的时间允许OpAmp输出稳定
 #define TIME2SETTLE_20V   2000  // The time in microseconds allowed for the OpAmp output to stabilize / 以微秒为单位的时间允许OpAmp输出稳定
 #define SMOOTHIE          0.05  // OpAmp output smoothing coefficient (1=no smoothing; default: 0.05) / OpAmp输出平滑系数 (1=无平滑; 默认：0.05)
-#define PID_ENABLE        false // enable PID control
+#define PID_ENABLE        true  // enable PID control
+#define PID_ENABLE_GAP    25    // temperature difference when PID algo should be activated
 #define BEEP_ENABLE       true  // enable/disable buzzer
 #define VOLTAGE_VALUE     3     // 电压值
 #define QC_ENABLE         false // enable/disable QC3.0
@@ -84,11 +85,15 @@
 #if defined(P_MOSFET)           // P-Channel MOSFET
 #define HEATER_ON         255
 #define HEATER_OFF        0
-#define HEATER_PWM        255 - Output
+#define HEATER_PWM        Output
+// have no idea why this was inverted???
+//#define HEATER_PWM        255 - Output
 #elif defined(N_MOSFET)         // N-Channel MOSFET
 #define HEATER_ON         0
 #define HEATER_OFF        255
-#define HEATER_PWM        Output
+#define HEATER_PWM        255 - Output
+// have no idea why this was inverted???
+//#define HEATER_PWM        Output
 #else
 #error Wrong MOSFET type!
 #endif

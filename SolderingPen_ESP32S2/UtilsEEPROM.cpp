@@ -10,7 +10,7 @@ bool write_default_EEPROM(){
   EEPROM.writeUChar(ADDR_TIME_2_OFF, TIME2OFF);
   EEPROM.writeUChar(ADDR_TIME_OF_BOOST, TIMEOFBOOST);
   EEPROM.writeUChar(ADDR_MAIN_SCREEN, MAINSCREEN);
-  EEPROM.writeBool(ADDR_PID_ENABLE, PID_ENABLE);
+//  EEPROM.writeBool(ADDR_PID_ENABLE, PID_ENABLE);
   EEPROM.writeBool(ADDR_BEEP_ENABLE, BEEP_ENABLE);
   EEPROM.writeUChar(ADDR_VOLTAGE_VALUE, VOLTAGE_VALUE);
   EEPROM.writeBool(ADDR_QC_ENABLE, QC_ENABLE);
@@ -74,7 +74,7 @@ bool update_EEPROM(){
   EEPROM.writeUChar(ADDR_TIME_2_OFF, time2off);
   EEPROM.writeUChar(ADDR_TIME_OF_BOOST, timeOfBoost);
   EEPROM.writeUChar(ADDR_MAIN_SCREEN, MainScrType);
-  EEPROM.writeBool(ADDR_PID_ENABLE, PIDenable);
+//  EEPROM.writeBool(ADDR_PID_ENABLE, PIDenable);
   EEPROM.writeBool(ADDR_BEEP_ENABLE, beepEnable);
   EEPROM.writeUChar(ADDR_VOLTAGE_VALUE, VoltageValue);
   EEPROM.writeBool(ADDR_QC_ENABLE, QCEnable);
@@ -131,7 +131,7 @@ bool read_EEPROM(){
   time2off = EEPROM.readUChar(ADDR_TIME_2_OFF);
   timeOfBoost = EEPROM.readUChar(ADDR_TIME_OF_BOOST);
   MainScrType = EEPROM.readUChar(ADDR_MAIN_SCREEN);
-  PIDenable = EEPROM.readBool(ADDR_PID_ENABLE);
+//  PIDenable = EEPROM.readBool(ADDR_PID_ENABLE);
   beepEnable = EEPROM.readBool(ADDR_BEEP_ENABLE);
   VoltageValue = EEPROM.readUChar(ADDR_VOLTAGE_VALUE);
   QCEnable = EEPROM.readBool(ADDR_QC_ENABLE);

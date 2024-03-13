@@ -29,7 +29,8 @@ QC3Control QC(QC_DP_PIN, QC_DM_PIN);
 #include <Wire.h>
 #endif
 
-#include <PID_v1.h>  // https://github.com/wagiminator/ATmega-Soldering-Station/blob/master/software/libraries/Arduino-PID-Library.zip
+//#include <PID_v1.h>  // https://github.com/wagiminator/ATmega-Soldering-Station/blob/master/software/libraries/Arduino-PID-Library.zip
+#include "FastPID.h"
 // (old cpp version of
 // https://github.com/mblythe86/C-PID-Library/tree/master/PID_v1)
 #include <EEPROM.h>  // 用于将用户设置存储到EEPROM
@@ -57,8 +58,9 @@ uint8_t accelIndex = 0;
 
 // Define aggressive and conservative PID tuning parameters
 // 定义积极和保守的PID调整参数
-double aggKp = 11, aggKi = 0.5, aggKd = 1;
-double consKp = 11, consKi = 3, consKd = 5;
+//double aggKp = 11, aggKi = 0.5, aggKd = 1;
+//float consKp = 11, consKi = 3, consKd = 5;
+float consKp = 20, consKi = 2, consKd = 3;
 
 // Default value can be changed by user and stored in EEPROM
 // 用户可以更改并存储在EEPROM中的默认值
@@ -91,7 +93,10 @@ volatile bool handleMoved;
 
 // Variables for temperature control 温度控制变量
 uint16_t SetTemp, ShowTemp, gap, Step;
-double Input, Output, Setpoint, RawTemp, CurrentTemp, ChipTemp;
+//double Input, Output, Setpoint, RawTemp, CurrentTemp, ChipTemp;
+double RawTemp, ChipTemp;
+long CurrentTemp;
+int16_t Input, Output, Setpoint;
 
 // Variables for voltage readings 电压读数变量
 uint16_t Vcc, Vin;
@@ -111,13 +116,15 @@ bool OledClear;
 uint32_t sleepmillis;
 uint32_t boostmillis;
 uint32_t buttonmillis;
+// PID timer
+uint32_t pidmillis{0};
 uint32_t goneMinutes;
 uint32_t goneSeconds;
 uint8_t SensorCounter = 0;
 
 // Specify variable pointers and initial PID tuning parameters
 // 指定变量指针和初始PID调优参数
-PID ctrl(&Input, &Output, &Setpoint, aggKp, aggKi, aggKd, REVERSE);
+FastPID ctrl(consKp, consKi, consKd, 10);
 
 // Setup u8g object depending on OLED controller
 // 根据OLED控制器设置u8g对象
@@ -155,7 +162,7 @@ bool MSC_Updating_Flag = false;
 // Button2 Obj
 Button2 btn;
 
-float limit = 0.0;
+uint32_t pwm_limit = 0;
 
 void setup() {
   // set PD pins
@@ -252,17 +259,20 @@ void setup() {
 
   // turn on heater if iron temperature is well below setpoint
   // 如果烙铁头温度远低于设定值，则打开加热器
-  limit = POWER_LIMIT_20;
+  pwm_limit = POWER_LIMIT_20;
+/*
   if (VoltageValue < 3) {
-    limit = POWER_LIMIT_15;
+    pwm_limit = POWER_LIMIT_15;
   }
   if (((CurrentTemp + 20) < DefaultTemp) && !inLockMode)
-    ledcWrite(CONTROL_CHANNEL, constrain(HEATER_ON, 0, limit));
+    ledcWrite(CONTROL_CHANNEL, constrain(HEATER_ON, 0, pwm_limit));
+*/
 
   // set PID output range and start the PID
   // 设置PID输出范围，启动PID
-  ctrl.SetOutputLimits(0, 255);
-  ctrl.SetMode(AUTOMATIC);
+  //ctrl.SetOutputLimits(0, 255);
+  ctrl.setOutputRange(0, 255);
+  //ctrl.SetMode(AUTOMATIC);
 
   // set initial rotary encoder values 设置旋转编码器的初始值
   // a0 = PINB & 1; b0 = PIND >> 7 & 1; ab0 = (a0 == b0);
@@ -283,7 +293,7 @@ void setup() {
   Wire.begin();
   Wire.setClock(100000);  // 400000
   if (accel.begin() == false) {
-    delay(500);
+    //delay(500);
     Serial.println("Accelerometer not detected.");
   }
   // lis2dh12_block_data_update_set(&(accel.dev_ctx), PROPERTY_DISABLE);
@@ -312,8 +322,16 @@ void setup() {
 
 int SENSORCheckTimes = 0;
 long lastMillis = 0;
+long meas_cnt, meas_ms = 0;
 
 void loop() {
+  ++meas_cnt;
+  if (millis() - meas_ms > 1000){
+    Serial.printf("lps: %u\n", meas_cnt);
+    meas_cnt = 0;
+    meas_ms = millis();
+  }
+
   long timems = millis();
   ROTARYCheck();  // check rotary encoder (temp/boost setting, enter setup menu)
                   // 检查旋转编码器(温度/升压设置，进入设置菜单)
@@ -330,7 +348,9 @@ void loop() {
   }
   SENSORCheckTimes++;
 
-  Thermostat();  // heater control 加热器控制
+  if (timems - pidmillis > 100)
+    Thermostat();  // heater control 加热器控制
+
   MainScreen();  // updates the main page on the OLED 刷新OLED主界面
   lastMillis = millis() - timems;
   //Serial.println(lastMillis);
@@ -401,15 +421,15 @@ void SLEEPCheck() {
     if (handleMoved) {  // if handle was moved 如果手柄被移动
       u8g2.setPowerSave(0);
       if (inSleepMode) {  // in sleep or off mode? 在睡眠模式还是关机模式?
-        limit = POWER_LIMIT_20;
+        pwm_limit = POWER_LIMIT_20;
         if (VoltageValue < 3) {
-          limit = POWER_LIMIT_15;
+          pwm_limit = POWER_LIMIT_15;
         }
         if ((CurrentTemp + 20) <
             SetTemp)  // if temp is well below setpoint 如果温度远低于设定值
           ledcWrite(
               CONTROL_CHANNEL,
-              constrain(HEATER_ON, 0, limit));  // then start the heater right
+              constrain(HEATER_ON, 0, pwm_limit));  // then start the heater right
                                                 // now 那现在就启动加热器
         beep();              // beep on wake-up
         beepIfWorky = true;  // beep again when working temperature is reached
@@ -519,33 +539,26 @@ void SENSORCheck() {
 
   // #endif
 
-  ledcWrite(CONTROL_CHANNEL,
-            HEATER_OFF);  // shut off heater in order to measure
-                          // temperature 关闭加热器以测量温度
-  if (VoltageValue == 3) {
-    delayMicroseconds(TIME2SETTLE_20V);
-  } else {
-    delayMicroseconds(TIME2SETTLE);  // wait for voltage to settle 等待电压稳定
-  }
-  long timems = millis();
-  double temp = denoiseAnalog(SENSOR_PIN);  // 读取ADC值的温度
-  lastMillis = millis() - timems;
-  // Serial.println(lastMillis);
-
   if (SensorCounter++ > 10) {
     Vin = getVIN();  // get Vin every now and then 时不时去获取VIN电压
     SensorCounter = 0;
   }
 
-  if (!inLockMode) {
-    limit = POWER_LIMIT_20;
-    if (VoltageValue < 3) {
-      limit = POWER_LIMIT_15;
-    }
-    ledcWrite(CONTROL_CHANNEL,
-              constrain(HEATER_PWM, 0,
-                        limit));  // turn on again heater 再次打开加热器
+}
+
+void measureTipTemp(){
+  ledcWrite(CONTROL_CHANNEL,
+            HEATER_OFF);  // shut off heater in order to measure
+                          // temperature 关闭加热器以测量温度
+  if (VoltageValue == 3) {
+    delay(TIME2SETTLE_20V/1000);
+  } else {
+    delay(TIME2SETTLE/1000);  // wait for voltage to settle 等待电压稳定
   }
+  long timems = millis();
+  auto temp = denoiseAnalog(SENSOR_PIN);  // 读取ADC值的温度
+  lastMillis = millis() - timems;
+  // Serial.println(lastMillis);
 
   RawTemp += (temp - RawTemp) *
              SMOOTHIE;  // stabilize ADC temperature reading 稳定ADC温度读数
@@ -553,7 +566,7 @@ void SENSORCheck() {
 
   // stabilize displayed temperature when around setpoint
   // 稳定显示温度时，周围的设定值
-  if ((ShowTemp != Setpoint) || (abs(ShowTemp - CurrentTemp) > 5))
+  if ((ShowTemp != Setpoint) || (abs(ShowTemp - CurrentTemp) > 1))
     ShowTemp = CurrentTemp;
   if (abs(ShowTemp - Setpoint) <= 1) ShowTemp = Setpoint;
   if (inLockMode) {
@@ -604,7 +617,7 @@ void calculateTemp() {
 
 // controls the heater 控制加热器
 void Thermostat() {
-  // define Setpoint acoording to current working mode
+  // define Setpoint according to current working mode
   // 根据当前工作模式定义设定值
   if (inOffMode || inLockMode)
     Setpoint = 0;
@@ -620,31 +633,44 @@ void Thermostat() {
     update_default_temp_EEPROM();
   }
 
+  // measure tip temperature
+  measureTipTemp();
+
   // control the heater (PID or direct) 控制加热器(PID或直接)
   gap = abs(Setpoint - CurrentTemp);
-  if (PIDenable) {
+  if (PIDenable && gap < PID_ENABLE_GAP) {
     Input = CurrentTemp;
+    Output = ctrl.step(Setpoint, Input);
+/*
     if (gap < 30)
       ctrl.SetTunings(consKp, consKi, consKd);
     else
       ctrl.SetTunings(aggKp, aggKi, aggKd);
     ctrl.Compute();
+*/
   } else {
+    // reset PID
+    ctrl.clear();
     // turn on heater if current temperature is below setpoint
     // 如果当前温度低于设定值，则打开加热器
     if ((CurrentTemp + 0.5) < Setpoint)
-      Output = 0;
-    else
       Output = 255;
+    else
+      Output = 0;
   }
-  limit = POWER_LIMIT_20;
+  pwm_limit = POWER_LIMIT_20;
   if (VoltageValue < 3) {
-    limit = POWER_LIMIT_15;
+    pwm_limit = POWER_LIMIT_15;
   } else if(VoltageValue == 3){
-    limit = POWER_LIMIT_20_2;
+    pwm_limit = POWER_LIMIT_20_2;
   }
-  ledcWrite(CONTROL_CHANNEL,
-            constrain((HEATER_PWM), 0, limit));  // set heater PWM 设置加热器PWM
+
+  uint32_t t = constrain((HEATER_PWM), 0, pwm_limit);
+  //uint32_t pwm = ledcRead(CONTROL_CHANNEL);
+  ledcWrite(CONTROL_CHANNEL, t);  // set heater PWM 设置加热器PWM
+  Serial.printf("PWM:%u, ms:%u\n", t, millis());
+
+  pidmillis = millis();
 }
 
 // creates a short beep on the buzzer 在蜂鸣器上创建一个短的哔哔声
@@ -1294,13 +1320,9 @@ uint16_t denoiseAnalog(byte port) {
 
   for (uint8_t i = 0; i < 8; i++) {
     // get 32 readings and sort them 获取32个读数并对其进行排序
-    float value, raw_adc;
-
-    raw_adc = adc_sensor.readMiliVolts();
+    auto raw_adc = adc_sensor.readMiliVolts();
     // value = constrain(0.4432 * raw_adc + 29.665, 20, 1000);
-    value = constrain(0.5378 * raw_adc + 6.3959, 20, 1000); // y = 0.5378x + 6.3959
-
-    resultArray[i] = value;
+    resultArray[i] = constrain(0.5378 * raw_adc + 6.3959, 20, 1000); // y = 0.5378x + 6.3959;
   }
 
   // sort resultArray with low time complexity
@@ -1628,13 +1650,13 @@ void heatWithLimit() {
   // ledcSetup(channel, hertz, resolution);
   // ledcAttachPin(pin, channel);
 
-  limit = 0;
+  pwm_limit = 0;
   if (VoltageValue < 3) {
-    limit = POWER_LIMIT_15;
+    pwm_limit = POWER_LIMIT_15;
   } else if (VoltageValue == 3) {
-    limit = POWER_LIMIT_20;
+    pwm_limit = POWER_LIMIT_20;
   }
   ledcWrite(
       CONTROL_CHANNEL,
-      constrain(HEATER_PWM, 0, limit));  // turn on again heater 再次打开加热器
+      constrain(HEATER_PWM, 0, pwm_limit));  // turn on again heater 再次打开加热器
 }
