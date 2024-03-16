@@ -17,11 +17,11 @@ uint16_t getVIN();
  *  VP+_Ru = 100k, Rd_GND = 1K
  * 
  */
-float denoiseAnalog(byte port);
+//float denoiseAnalog(byte port);
 
 // calculates real temperature value according to ADC reading and calibration values
 // 根据ADC读数和校准值，计算出真实的温度值
-void calculateTemp();
+int32_t calculateTemp(float t);
 
 // reads current rotary encoder value 读取当前旋转编码器值
 int getRotary();
@@ -141,6 +141,7 @@ void AddTipScreen();
 // information display screen 信息显示屏幕
 void InfoScreen();
 
+// check -/+ buttons press 
 void Button_loop();
 
 static void usbEventCallback(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);

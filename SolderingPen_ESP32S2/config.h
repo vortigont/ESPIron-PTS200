@@ -24,11 +24,13 @@
 #define BUTTON_PIN        0     // switch 按键right
 #define BUTTON_P_PIN      4     // 1 键位为“+”
 #define BUTTON_N_PIN      2     // 2 键位为“-”
-#define CONTROL_PIN       5     // heater MOSFET PWM control 加热器MOSFET PWM控制
-#define CONTROL_CHANNEL   2     // PWM channel
-#define CONTROL_FREQ      200   // PWM frequency
-#define CONTROL_HIGHFREQ  1000  // PWM frequency for 20V/50% PWM mode
-#define CONTROL_RES       8     // PWM resolution
+#define HEATER_PIN        5     // heater MOSFET PWM control 加热器MOSFET PWM控制
+
+// Heater PWM parameters
+#define HEATER_CHANNEL    LEDC_CHANNEL_2     // PWM channel
+#define HEATER_FREQ       200   // PWM frequency
+#define HEATER_HIGHFREQ   1000  // PWM frequency for 20V/50% PWM mode
+#define HEATER_RES        LEDC_TIMER_8_BIT     // PWM resolution
 
 // CH224K USB PD chip pins connection
 // https://components101.com/sites/default/files/component_datasheet/WCH_CH224K_ENG.pdf
@@ -72,8 +74,8 @@
 #define TIME2SETTLE       5000  // The time in microseconds allowed for the OpAmp output to stabilize / 以微秒为单位的时间允许OpAmp输出稳定
 #define TIME2SETTLE_20V   2000  // The time in microseconds allowed for the OpAmp output to stabilize / 以微秒为单位的时间允许OpAmp输出稳定
 #define SMOOTHIE          0.2   // OpAmp output smoothing coefficient (1=no smoothing; default: 0.05) / OpAmp输出平滑系数 (1=无平滑; 默认：0.05)
-#define PID_ENABLE        true  // enable PID control
-#define PID_ENABLE_GAP    25    // temperature difference when PID algo should be activated
+//#define PID_ENABLE        true  // enable PID control
+#define PID_ENGAGE_DIFF   50    // temperature difference when PID algo should be engaged
 #define BEEP_ENABLE       true  // enable/disable buzzer
 #define VOLTAGE_VALUE     3     // 电压值
 #define QC_ENABLE         false // enable/disable QC3.0
@@ -84,17 +86,9 @@
 
 // MOSFET control definitions
 #if defined(P_MOSFET)           // P-Channel MOSFET
-#define HEATER_ON         255
-#define HEATER_OFF        0
-#define HEATER_PWM        Output
-// have no idea why this was inverted???
-//#define HEATER_PWM        255 - Output
+#define HEATER_INVERT     false
 #elif defined(N_MOSFET)         // N-Channel MOSFET
-#define HEATER_ON         0
-#define HEATER_OFF        255
-#define HEATER_PWM        255 - Output
-// have no idea why this was inverted???
-//#define HEATER_PWM        Output
+#define HEATER_INVERT     true
 #else
 #error Wrong MOSFET type!
 #endif

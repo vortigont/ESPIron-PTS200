@@ -3,9 +3,10 @@
 #include "main.h"
 #include "const.h"
 #include "log.h"
+#include "heater.hpp"
 
 //
-#include <Button2.h>
+//#include <Button2.h>
 #include <QC3Control.h>
 
 //
@@ -32,7 +33,6 @@ QC3Control QC(QC_DP_PIN, QC_DM_PIN);
 #endif
 
 //#include <PID_v1.h>  // https://github.com/wagiminator/ATmega-Soldering-Station/blob/master/software/libraries/Arduino-PID-Library.zip
-#include "FastPID.h"
 // (old cpp version of
 // https://github.com/mblythe86/C-PID-Library/tree/master/PID_v1)
 #include <EEPROM.h>  // 用于将用户设置存储到EEPROM
@@ -61,11 +61,6 @@ uint16_t accels[32][3];
 uint8_t accelIndex = 0;
 #define ACCEL_SAMPLES 32
 
-// Define aggressive and conservative PID tuning parameters
-// 定义积极和保守的PID调整参数
-//double aggKp = 11, aggKi = 0.5, aggKd = 1;
-//float consKp = 11, consKi = 3, consKd = 5;
-float consKp = 20, consKi = 2, consKd = 3;
 
 // Default value can be changed by user and stored in EEPROM
 // 用户可以更改并存储在EEPROM中的默认值
@@ -76,12 +71,13 @@ uint16_t time2sleep = TIME2SLEEP;
 uint8_t time2off = TIME2OFF;
 uint8_t timeOfBoost = TIMEOFBOOST;
 uint8_t MainScrType = MAINSCREEN;
-bool PIDenable = PID_ENABLE;
+//bool PIDenable = PID_ENABLE;
 bool beepEnable = BEEP_ENABLE;
 volatile uint8_t VoltageValue = VOLTAGE_VALUE;
 bool QCEnable = QC_ENABLE;
 uint8_t WAKEUPthreshold = WAKEUP_THRESHOLD;
 bool restore_default_config = false;
+
 
 // Default value for T12
 // T12的默认值
@@ -91,20 +87,18 @@ uint8_t CurrentTip = 0;
 uint8_t NumberOfTips = 1;
 
 // Variables for pin change interrupt 引脚更改中断的变量
-volatile uint8_t a0, b0, c0, d0;
+// those a flags for press and hold for buttons
+volatile uint8_t a0, b0, c0;
 volatile bool ab0;
+// button press counters
 volatile int count, countMin, countMax, countStep;
 volatile bool handleMoved;
 
 // Variables for temperature control 温度控制变量
-uint16_t SetTemp, ShowTemp, gap, Step;
-//double Input, Output, Setpoint, RawTemp, CurrentTemp, accellTemp;
-// tip smoothed temperature
-float RawTemp;
+uint16_t ShowTemp, Step;
+
 // accelerometer chip temperature
 float accellTemp;
-long CurrentTemp;
-int16_t Input, Output, Setpoint;
 
 // Variables for voltage readings 电压读数变量
 uint16_t Vcc, Vin;
@@ -130,10 +124,6 @@ uint32_t goneMinutes;
 uint32_t goneSeconds;
 uint8_t SensorCounter = 0;
 
-// Specify variable pointers and initial PID tuning parameters
-// 指定变量指针和初始PID调优参数
-FastPID ctrl(consKp, consKi, consKd, 10);
-
 // Setup u8g object depending on OLED controller
 // 根据OLED控制器设置u8g对象
 #if defined(SSD1306)
@@ -154,7 +144,6 @@ uint8_t SENSORTmpTime = 0;
 
 // ADC Calibrate
 uint16_t vref_adc0, vref_adc1;
-ESP32AnalogRead adc_sensor;
 ESP32AnalogRead adc_vin;
 
 // Language
@@ -168,9 +157,12 @@ FirmwareMSC MSC_Update;
 bool MSC_Updating_Flag = false;
 
 // Button2 Obj
-Button2 btn;
+//Button2 btn;
 
 uint32_t pwm_limit = 0;
+
+// Iron tipe heater object
+TipHeater heater(HEATER_PIN, HEATER_CHANNEL, HEATER_INVERT);
 
 void setup() {
   // set PD pins
@@ -190,7 +182,6 @@ void setup() {
   Serial.begin(115200);
   Serial.setTxTimeoutMs(0);
 
-  adc_sensor.attach(SENSOR_PIN);
   adc_vin.attach(VIN_PIN);
 
   /*#if defined(MPU)
@@ -203,7 +194,7 @@ void setup() {
   pinMode(SENSOR_PIN, INPUT_PULLUP);
   // pinMode(VIN_PIN, INPUT);
   pinMode(BUZZER_PIN, OUTPUT);
-  // pinMode(CONTROL_PIN, OUTPUT);
+  // pinMode(HEATER_PIN, OUTPUT);
   pinMode(BUTTON_P_PIN, INPUT_PULLUP);
   pinMode(BUTTON_N_PIN, INPUT_PULLUP);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -259,29 +250,6 @@ void setup() {
   delay(100);
   Vin = getVIN();
 
-  // read and set current iron temperature 读取和设置当前的烙铁头温度
-  SetTemp = DefaultTemp;
-  RawTemp = denoiseAnalog(SENSOR_PIN);
-
-  calculateTemp();
-
-  // turn on heater if iron temperature is well below setpoint
-  // 如果烙铁头温度远低于设定值，则打开加热器
-  pwm_limit = POWER_LIMIT_20;
-/*
-  if (VoltageValue < 3) {
-    pwm_limit = POWER_LIMIT_15;
-  }
-  if (((CurrentTemp + 20) < DefaultTemp) && !inLockMode)
-    ledcWrite(CONTROL_CHANNEL, constrain(HEATER_ON, 0, pwm_limit));
-*/
-
-  // set PID output range and start the PID
-  // 设置PID输出范围，启动PID
-  //ctrl.SetOutputLimits(0, 255);
-  ctrl.setOutputRange(0, 255);
-  //ctrl.SetMode(AUTOMATIC);
-
   // set initial rotary encoder values 设置旋转编码器的初始值
   // a0 = PINB & 1; b0 = PIND >> 7 & 1; ab0 = (a0 == b0);
   a0 = 0;
@@ -322,10 +290,10 @@ void setup() {
     u8g2.setDisplayRotation(U8G2_R1);
   }
 
-
-  // btn.begin(BUTTON_PIN);
-  // btn.setDoubleClickHandler(turnOffHeater);
-  // btn.setDebounceTime(25);
+  // initialize heater
+  heater.init();
+  // read and set saved iron temperature 读取和设置当前的烙铁头温度
+  heater.setTargetTemp( DefaultTemp );
 }
 
 int SENSORCheckTimes = 0;
@@ -335,7 +303,7 @@ long meas_cnt, meas_ms = 0;
 void loop() {
   ++meas_cnt;
   if (millis() - meas_ms > 1000){
-    Serial.printf("lps: %u\n", meas_cnt);
+    LOGV(T_DBG, printf, "lps: %u\n", meas_cnt);
     meas_cnt = 0;
     meas_ms = millis();
   }
@@ -369,7 +337,7 @@ void loop() {
 void ROTARYCheck() {
   // set working temperature according to rotary encoder value
   // 根据旋转编码器值设定工作温度
-  SetTemp = getRotary();
+  heater.setTargetTemp( getRotary() );
 
   uint8_t c = digitalRead(BUTTON_PIN);
   if (!c && c0) {
@@ -386,13 +354,16 @@ void ROTARYCheck() {
       } else {
         if (inLockMode) {
           inLockMode = false;
+          heater.enable();
         } else {
           buttonmillis = millis();
           while ((digitalRead(BUTTON_PIN)) && ((millis() - buttonmillis) < 200))
             delay(10);
           if ((millis() - buttonmillis) >= 200) {  // single click
             if (inOffMode) {
+              // enable heater
               inOffMode = false;
+              heater.enable();
             } else {
               inBoostMode = !inBoostMode;
               if (inBoostMode) {
@@ -401,7 +372,9 @@ void ROTARYCheck() {
               handleMoved = true;
             }
           } else {  // double click
+            // disable heater
             inOffMode = true;
+            heater.disable();
           }
         }
       }
@@ -423,9 +396,9 @@ void ROTARYCheck() {
 
 // check and activate/deactivate sleep modes 检查和激活/关闭睡眠模式
 void SLEEPCheck() {
-  if (inLockMode) {
-    ;
-  } else {
+  if (inLockMode) 
+    return;
+
     if (handleMoved) {  // if handle was moved 如果手柄被移动
       u8g2.setPowerSave(0);
       if (inSleepMode) {  // in sleep or off mode? 在睡眠模式还是关机模式?
@@ -433,12 +406,7 @@ void SLEEPCheck() {
         if (VoltageValue < 3) {
           pwm_limit = POWER_LIMIT_15;
         }
-        if ((CurrentTemp + 20) <
-            SetTemp)  // if temp is well below setpoint 如果温度远低于设定值
-          ledcWrite(
-              CONTROL_CHANNEL,
-              constrain(HEATER_ON, 0, pwm_limit));  // then start the heater right
-                                                // now 那现在就启动加热器
+        heater.enable();
         beep();              // beep on wake-up
         beepIfWorky = true;  // beep again when working temperature is reached
                              // 当达到工作温度，会发出蜂鸣声
@@ -453,14 +421,16 @@ void SLEEPCheck() {
     goneSeconds = (millis() - sleepmillis) / 1000;
     if ((!inSleepMode) && (time2sleep > 0) && (goneSeconds >= time2sleep)) {
       inSleepMode = true;
+      heater.setTargetTemp(SleepTemp);
       beep();
     } else if ((!inOffMode) && (time2off > 0) &&
                ((goneSeconds / 60) >= time2off)) {
       inOffMode = true;
+      heater.disable();
       u8g2.setPowerSave(1);
       beep();
     }
-  }
+
 }
 
 // reads temperature, vibration switch and supply voltages
@@ -555,7 +525,8 @@ void SENSORCheck() {
 }
 
 void measureTipTemp(){
-  ledcWrite(CONTROL_CHANNEL,
+/*
+  ledcWrite(HEATER_CHANNEL,
             HEATER_OFF);  // shut off heater in order to measure
                           // temperature 关闭加热器以测量温度
   if (VoltageValue == 3) {
@@ -570,21 +541,24 @@ void measureTipTemp(){
 
   RawTemp += (temp - RawTemp) * SMOOTHIE;  // stabilize ADC temperature reading 稳定ADC温度读数
   calculateTemp();  // calculate real temperature value 计算实际温度值
-  LOGV(T_THERMO, printf, "smooth T: %6.2f, Calibrated T: %d\n", RawTemp, CurrentTemp);
+*/
 
   // stabilize displayed temperature when around setpoint
   // 稳定显示温度时，周围的设定值
-  if ((ShowTemp != Setpoint) || (abs(ShowTemp - CurrentTemp) > 1))
-    ShowTemp = CurrentTemp;
-  if (abs(ShowTemp - Setpoint) <= 1) ShowTemp = Setpoint;
+  ShowTemp = heater.getCurrentTemp();
+/*
+  if ((ShowTemp != heater.getTargetTemp()) || (abs(ShowTemp - heater.getCurrentTemp()) > 1))
+    ShowTemp = heater.getCurrentTemp();
+  if (abs(ShowTemp - heater.getTargetTemp()) <= 1) ShowTemp = heater.getTargetTemp();
   if (inLockMode) {
     ShowTemp = 0;
   }
+*/
 
   // set state variable if temperature is in working range; beep if working
   // temperature was just reached
   // 温度在工作范围内可设置状态变量;当工作温度刚刚达到时，会发出蜂鸣声
-  gap = abs(SetTemp - CurrentTemp);
+  int gap = abs(heater.getTargetTemp() - heater.getCurrentTemp());
   if (gap < 5) {
     if (!isWorky && beepIfWorky) beep();
     isWorky = true;
@@ -595,88 +569,55 @@ void measureTipTemp(){
   // checks if tip is present or currently inserted
   // 检查烙铁头是否存在或当前已插入
   if (ShowTemp > TEMP_NOTIP) TipIsPresent = false;  // tip removed ? 烙铁头移除？
-  if (!TipIsPresent &&
-      (ShowTemp < 500)) {  // new tip inserted ? 新的烙铁头插入？
-    ledcWrite(CONTROL_CHANNEL, HEATER_OFF);  // shut off heater 关闭加热器
-    beep();                                  // beep for info
+  if (!TipIsPresent && (ShowTemp < TEMP_NOTIP)) {  // new tip inserted ? 新的烙铁头插入？
+    //heater.disable();     // shut off heater 关闭加热器
+    beep();               // beep for info
     TipIsPresent = true;  // tip is present now 烙铁头已经存在
-    ChangeTipScreen();  // show tip selection screen 显示烙铁头选择屏幕
-    update_EEPROM();     // update setting in EEPROM EEPROM的更新设置
-    handleMoved = true;  // reset all timers 重置所有计时器
-    RawTemp = denoiseAnalog(SENSOR_PIN);  // restart temp smooth algorithm 重启临时平滑算法
-    c0 = LOW;         // switch must be released 必须松开开关
-    setRotary(TEMP_MIN, TEMP_MAX, TEMP_STEP,
-              SetTemp);  // reset rotary encoder 重置旋转编码器
+    ChangeTipScreen();    // show tip selection screen 显示烙铁头选择屏幕
+    update_EEPROM();      // update setting in EEPROM EEPROM的更新设置
+    handleMoved = true;   // reset all timers 重置所有计时器
+    //RawTemp = denoiseAnalog(SENSOR_PIN);  // restart temp smooth algorithm 重启临时平滑算法
+    c0 = LOW;             // switch must be released 必须松开开关
+    setRotary(TEMP_MIN, TEMP_MAX, TEMP_STEP, heater.getTargetTemp());  // reset rotary encoder 重置旋转编码器
   }
 }
 
 // calculates real temperature value according to ADC reading and calibration
 // values 根据ADC读数和校准值，计算出真实的温度值
-void calculateTemp() {
-  if (RawTemp < 200)
-    CurrentTemp = map(RawTemp, 20, 200, 20, CalTemp[CurrentTip][0]);
-  else if (RawTemp < 280)
-    CurrentTemp =
-        map(RawTemp, 200, 280, CalTemp[CurrentTip][0], CalTemp[CurrentTip][1]);
-  else
-    CurrentTemp =
-        map(RawTemp, 280, 360, CalTemp[CurrentTip][1], CalTemp[CurrentTip][2]);
+int32_t calculateTemp(float t) {
+//  if (RawTemp < 200)
+//    CurrentTemp = map(RawTemp, 20, 200, 20, CalTemp[CurrentTip][0]);
+  if (t < 200)
+    return map(static_cast<long>(t), 20, 200, 20, CalTemp[CurrentTip][0]);
+
+  if (t < 280)
+    return map(static_cast<long>(t), 200, 280, CalTemp[CurrentTip][0], CalTemp[CurrentTip][1]);
+
+  return map(static_cast<long>(t), 280, 360, CalTemp[CurrentTip][1], CalTemp[CurrentTip][2]);
 }
 
 // controls the heater 控制加热器
 void Thermostat() {
-  // define Setpoint according to current working mode
+  // define heater TargetTemp according to current working mode
   // 根据当前工作模式定义设定值
   if (inOffMode || inLockMode)
-    Setpoint = 0;
+    heater.disable();
   else if (inSleepMode)
-    Setpoint = SleepTemp;
+    heater.setTargetTemp(SleepTemp);
   else if (inBoostMode) {
-    Setpoint = constrain(SetTemp + BoostTemp, 0, TEMP_MAX);
-  } else
-    Setpoint = SetTemp;
-
+    heater.setTargetTemp( constrain(heater.getTargetTemp() + BoostTemp, 0, TEMP_MAX) );
+  }
+  
+/*
+  // not sure what this is
   if (SetTemp != DefaultTemp) {
     DefaultTemp = SetTemp;  // 把设置里面的默认温度也修改了
     update_default_temp_EEPROM();
   }
+*/
 
   // measure tip temperature, it will reset PWM duty to "0"
   measureTipTemp();
-
-  // control the heater (PID or direct) 控制加热器(PID或直接)
-  gap = abs(Setpoint - CurrentTemp);
-  if (PIDenable && gap < PID_ENABLE_GAP) {
-    Input = CurrentTemp;
-    Output = ctrl.step(Setpoint, Input);
-/*
-    if (gap < 30)
-      ctrl.SetTunings(consKp, consKi, consKd);
-    else
-      ctrl.SetTunings(aggKp, aggKi, aggKd);
-    ctrl.Compute();
-*/
-  } else {
-    // reset PID
-    ctrl.clear();
-    // turn on heater if current temperature is below setpoint
-    // 如果当前温度低于设定值，则打开加热器
-    if ((CurrentTemp + 0.5) < Setpoint)
-      Output = 255;
-    else
-      Output = 0;
-  }
-  pwm_limit = POWER_LIMIT_20;
-  if (VoltageValue < 3) {
-    pwm_limit = POWER_LIMIT_15;
-  } else if(VoltageValue == 3){
-    pwm_limit = POWER_LIMIT_20_2;
-  }
-
-  uint32_t t = constrain((HEATER_PWM), 0, pwm_limit);
-  //uint32_t pwm = ledcRead(CONTROL_CHANNEL);
-  ledcWrite(CONTROL_CHANNEL, t);  // set heater PWM 设置加热器PWM
-  LOGV(T_PWM, printf, "Duty:%u\n", t);
 
   pidmillis = millis();
 }
@@ -717,7 +658,7 @@ void MainScreen() {
   do {
     // u8g2.setCursor(0, 0);
     // u8g2.print(F("nihao"));
-    //  draw setpoint temperature
+    //  draw heater.getTargetTemp() temperature
     u8g2.setFont(PTS200_16);
     if(language == 2){
       u8g2.setFont(u8g2_font_unifont_t_chinese3);
@@ -727,7 +668,7 @@ void MainScreen() {
     u8g2.drawUTF8(0, 0 + SCREEN_OFFSET, txt_set_temp[language]);
     u8g2.setCursor(40, 0 + SCREEN_OFFSET);
     u8g2.setFont(u8g2_font_unifont_t_chinese3);
-    u8g2.print(Setpoint, 0);
+    u8g2.print(heater.getTargetTemp(), 0);
 
     u8g2.setFont(PTS200_16);
     if(language == 2){
@@ -745,7 +686,7 @@ void MainScreen() {
       u8g2.print(txt_boost[language]);
     else if (isWorky)
       u8g2.print(txt_worky[language]);
-    else if (Output < 180)
+    else if (heater.getCurrentTemp() - heater.getTargetTemp() < PID_ENGAGE_DIFF)
       u8g2.print(txt_on[language]);
     else
       u8g2.print(txt_hold[language]);
@@ -791,9 +732,8 @@ void MainScreen() {
 
 // setup screen 设置屏幕
 void SetupScreen() {
-  ledcWrite(CONTROL_CHANNEL, HEATER_OFF);  // shut off heater
+  heater.disable();
   beep();
-  uint16_t SaveSetTemp = SetTemp;
   uint8_t selection = 0;
   bool repeat = true;
 
@@ -882,8 +822,8 @@ void SetupScreen() {
   }
   update_EEPROM();
   handleMoved = true;
-  SetTemp = SaveSetTemp;
-  setRotary(TEMP_MIN, TEMP_MAX, TEMP_STEP, SetTemp);
+  heater.enable();
+  setRotary(TEMP_MIN, TEMP_MAX, TEMP_STEP, heater.getTargetTemp());
 }
 
 // tip settings screen 烙铁头设置屏幕
@@ -1002,9 +942,9 @@ uint8_t MenuScreen(const char *Items[][language_types], uint8_t numberOfItems,
     u8g2.firstPage();
     do {
       u8g2.setFont(PTS200_16);
-    if(language == 2){
-      u8g2.setFont(u8g2_font_unifont_t_chinese3);
-    }
+      if(language == 2){
+        u8g2.setFont(u8g2_font_unifont_t_chinese3);
+      }
       u8g2.setFontPosTop();
       u8g2.drawUTF8(0, 0 + SCREEN_OFFSET, Items[0][language]);
       if (isTipScreen)
@@ -1096,9 +1036,9 @@ void InfoScreen() {
     u8g2.firstPage();
     do {
       u8g2.setFont(PTS200_16);
-          if(language == 2){
-      u8g2.setFont(u8g2_font_unifont_t_chinese3);
-    }
+      if(language == 2){
+        u8g2.setFont(u8g2_font_unifont_t_chinese3);
+      }
       u8g2.setFontPosTop();
       u8g2.setCursor(0, 0 + SCREEN_OFFSET);
       u8g2.print(txt_temp[language]);
@@ -1114,6 +1054,7 @@ void InfoScreen() {
       // u8g2.setCursor(0, 48); u8g2.print(F("IMU:  "));
       // u8g2.print(accelerometer[1], DEC); u8g2.print(F(""));
     } while (u8g2.nextPage());
+
     if (lastbutton && digitalRead(BUTTON_PIN)) {
       delay(10);
       lastbutton = false;
@@ -1173,12 +1114,12 @@ void ChangeTipScreen() {
 // temperature calibration screen 温度校准屏幕
 void CalibrationScreen() {
   uint16_t CalTempNew[4];
-  uint16_t tempSetTemp = SetTemp;
+  uint16_t lastTargetTemp = heater.getTargetTemp();
   for (uint8_t CalStep = 0; CalStep < 3; CalStep++) {
-    SetTemp = CalTemp[CurrentTip][CalStep];
-    Serial.print("SetTemp: ");
-    Serial.println(SetTemp);
-    setRotary(100, 500, 1, SetTemp);
+    heater.setTargetTemp( CalTemp[CurrentTip][CalStep] );
+    LOGI(T_CTRL, print, "Target Temp: ");
+    LOGI(T_CTRL, println, heater.getTargetTemp());
+    setRotary(100, 500, 1, heater.getTargetTemp());
     beepIfWorky = true;
     bool lastbutton = (!digitalRead(BUTTON_PIN));
 
@@ -1209,7 +1150,7 @@ void CalibrationScreen() {
         } else {
           u8g2.setCursor(0, 32 + SCREEN_OFFSET);
           u8g2.print(txt_temp_2[language]);
-          u8g2.print(uint16_t(RawTemp));
+          u8g2.print(heater.getCurrentTemp());
           u8g2.setCursor(0, 48 + SCREEN_OFFSET);
           u8g2.print(txt_wait_pls[language]);
         }
@@ -1225,7 +1166,7 @@ void CalibrationScreen() {
     delay(10);
   }
 
-  ledcWrite(CONTROL_CHANNEL, HEATER_OFF);  // shut off heater 关闭加热器
+  heater.disable();  // shut off heater 关闭加热器
   if (VoltageValue == 3) {
     delayMicroseconds(TIME2SETTLE_20V);
   } else {
@@ -1239,7 +1180,7 @@ void CalibrationScreen() {
     }
   }
 
-  SetTemp = tempSetTemp;
+  heater.setTargetTemp( lastTargetTemp );
   update_EEPROM();
 }
 
@@ -1319,42 +1260,6 @@ void AddTipScreen() {
     MessageScreen(MaxTipMessage, sizeof(MaxTipMessage));
 }
 
-// 对32个ADC读数进行平均以降噪
-//  VP+_Ru = 100k, Rd_GND = 1K
-float denoiseAnalog(byte port) {
-  //float maxValue, minValue;
-uint32_t result{0}, resultArray[8];
-
-  for (uint8_t i = 0; i < 8; i++) {
-    // get 32 readings and sort them 获取32个读数并对其进行排序
-    resultArray[i] = adc_sensor.readMiliVolts();
-    // value = constrain(0.4432 * raw_adc + 29.665, 20, 1000);
-  }
-
-  // sort resultArray with low time complexity
-  // 用低时间复杂度对resultArray进行排序
-  for (uint8_t i = 0; i < 8; i++) {
-    for (uint8_t j = i + 1; j < 8; j++) {
-      if (resultArray[i] > resultArray[j]) {
-        auto temp = resultArray[i];
-        resultArray[i] = resultArray[j];
-        resultArray[j] = temp;
-      }
-    }
-  }
-
-  // get the average of the middle 4 readings 获取中间20个读数的平均值
-  for (uint8_t i = 2; i < 6; i++) {
-    result += resultArray[i];
-  }
-
-  // convert mV to Celsius
-  auto t = constrain(0.5378 * result / 4 + 6.3959, 20.0, 1000.0);
-  LOGV(T_ADC, printf, "ADC avg mV:%u / C:%6.2f\n", result / 4, t);
-////  resultArray[i] = constrain(0.5378 * raw_adc + 6.3959, 20, 1000); // y = 0.5378x + 6.3959;
-  return t;
-}
-
 // get LIS/MPU temperature 获取LIS/MPU的温度
 float getAccellTemp() {
 #if defined(MPU)
@@ -1425,6 +1330,7 @@ int32_t variance(int16_t a[]) {
 unsigned int Button_Time1 = 0, Button_Time2 = 0;
 
 void Button_loop() {
+  // '-' decrementing button
   if (!digitalRead(BUTTON_N_PIN) && a0 == 1) {
     delay(BUTTON_DELAY);
     if (!digitalRead(BUTTON_N_PIN)) {
@@ -1439,7 +1345,7 @@ void Button_loop() {
     }
   } else if (!digitalRead(BUTTON_N_PIN) && a0 == 0) {
     delay(BUTTON_DELAY);
-    if (Button_Time1 > 10)  // 这里的数越大，需要长按时间更长
+    if (Button_Time1 > 10)  // this value controls long-press timeout / 这里的数越大，需要长按时间更长
       count = constrain(count + countStep, countMin, countMax);
     else
       Button_Time1++;
@@ -1448,6 +1354,7 @@ void Button_loop() {
     a0 = 1;
   }
 
+  // '+' incrementing button
   if (!digitalRead(BUTTON_P_PIN) && b0 == 1) {
     delay(BUTTON_DELAY);
     if (!digitalRead(BUTTON_P_PIN)) {
@@ -1462,7 +1369,7 @@ void Button_loop() {
     }
   } else if (!digitalRead(BUTTON_P_PIN) && b0 == 0) {
     delay(BUTTON_DELAY);
-    if (Button_Time2 > 10)  // 这里的数越大，需要长按时间更长
+    if (Button_Time2 > 10)  // this value controls long-press timeout / 这里的数越大，需要长按时间更长
       count = constrain(count - countStep, countMin, countMax);
     else
       Button_Time2++;
@@ -1501,18 +1408,13 @@ void PD_Update() {
     } break;
     default:;
   }
-
+/*
   if (VoltageValue == 3) {
-    ledcSetup(CONTROL_CHANNEL, CONTROL_HIGHFREQ, CONTROL_RES);
+    ledcSetup(HEATER_CHANNEL, HEATER_HIGHFREQ, HEATER_RES);
   } else {
-    ledcSetup(CONTROL_CHANNEL, CONTROL_FREQ, CONTROL_RES);
+    ledcSetup(HEATER_CHANNEL, HEATER_FREQ, HEATER_RES);
   }
-
-  ledcAttachPin(CONTROL_PIN, CONTROL_CHANNEL);
-
-  // analogWrite(CONTROL_PIN, HEATER_OFF); // this shuts off the
-  // heater这是用来关闭加热器的
-  ledcWrite(CONTROL_CHANNEL, HEATER_OFF);
+*/
 }
 
 static void usbEventCallback(void *arg, esp_event_base_t event_base,
@@ -1616,8 +1518,6 @@ static void usbEventCallback(void *arg, esp_event_base_t event_base,
   }
 }
 
-void turnOffHeater(Button2 &b) { inOffMode = true; }
-
 // uint16_t calibrate_adc(adc_unit_t adc, adc_atten_t channel) {
 //   uint16_t vref;
 //   esp_adc_cal_characteristics_t adc_chars;
@@ -1637,18 +1537,3 @@ void turnOffHeater(Button2 &b) { inOffMode = true; }
 //   }
 //   return vref;
 // }
-
-void heatWithLimit() {
-  // ledcSetup(channel, hertz, resolution);
-  // ledcAttachPin(pin, channel);
-
-  pwm_limit = 0;
-  if (VoltageValue < 3) {
-    pwm_limit = POWER_LIMIT_15;
-  } else if (VoltageValue == 3) {
-    pwm_limit = POWER_LIMIT_20;
-  }
-  ledcWrite(
-      CONTROL_CHANNEL,
-      constrain(HEATER_PWM, 0, pwm_limit));  // turn on again heater 再次打开加热器
-}

@@ -34,7 +34,6 @@ extern uint16_t time2sleep;
 extern uint8_t time2off;
 extern uint8_t timeOfBoost;
 extern uint8_t MainScrType;
-extern bool PIDenable;
 extern bool beepEnable;
 extern volatile uint8_t VoltageValue;
 extern bool QCEnable;
