@@ -1,65 +1,55 @@
 //
 #include "config.h"
 #include "main.h"
+#include "ts.h"
+#include "heater.hpp"
+#include "Languages.h"
 #include "const.h"
 #include "log.h"
-#include "heater.hpp"
 
-//
-//#include <Button2.h>
 #include <QC3Control.h>
-
-//
 #include "FirmwareMSC.h"
-#include "Languages.h"
 #include "USB.h"
 #include "UtilsEEPROM.h"
-
-QC3Control QC(QC_DP_PIN, QC_DM_PIN);
-
 #include <U8g2lib.h>  // https://github.com/olikraus/u8g2
-// font
-#include "PTS200_16.h"
-
-// https://github.com/madhephaestus/ESP32AnalogRead
-#include <ESP32AnalogRead.h>
-
-
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
 #endif
 #ifdef U8X8_HAVE_HW_I2C
 #include <Wire.h>
 #endif
-
-//#include <PID_v1.h>  // https://github.com/wagiminator/ATmega-Soldering-Station/blob/master/software/libraries/Arduino-PID-Library.zip
-// (old cpp version of
-// https://github.com/mblythe86/C-PID-Library/tree/master/PID_v1)
+// font
+#include "PTS200_16.h"
+// https://github.com/madhephaestus/ESP32AnalogRead
+#include <ESP32AnalogRead.h>
 #include <EEPROM.h>  // 用于将用户设置存储到EEPROM
-
-// 选择加速度计芯片
-// #define MPU
-#define LIS
-
-/*#if defined(MPU)
-  #include <MPU6050_tockn.h> //https://github.com/tockn/MPU6050_tockn
-  MPU6050 mpu6050(Wire);*/
-
-// #if defined(LIS)
 #include "SparkFun_LIS2DH12.h"  //Click here to get the library: http://librarymanager/All#SparkFun_LIS2DH12
 
+#define LIS
+#define ACCEL_SAMPLES 32
 
 
-SPARKFUN_LIS2DH12 accel;  // Create instance
-
-/*#else
-  #error Wrong SENSOR type!
-  #endif*/
+QC3Control QC(QC_DP_PIN, QC_DM_PIN);
+SPARKFUN_LIS2DH12 accel;
+// Setup u8g object depending on OLED controller
+// 根据OLED控制器设置u8g对象
+#if defined(SSD1306)
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE,
+                                         /* clock=*/22, /* data=*/21);
+#elif defined(SH1107)
+U8G2_SH1107_64X128_F_HW_I2C u8g2(U8G2_R1, 7);
+#else
+#error Wrong OLED controller type!
+#endif
+FirmwareMSC MSC_Update;
+// ADC Calibrate
+ESP32AnalogRead adc_vin;
+// Iron tip heater object
+TipHeater heater(HEATER_PIN, HEATER_CHANNEL, HEATER_INVERT);
 
 int16_t gx = 0, gy = 0, gz = 0;
 uint16_t accels[32][3];
 uint8_t accelIndex = 0;
-#define ACCEL_SAMPLES 32
 
 
 // Default value can be changed by user and stored in EEPROM
@@ -97,11 +87,9 @@ volatile bool handleMoved;
 // Variables for temperature control 温度控制变量
 uint16_t ShowTemp, Step;
 
-// accelerometer chip temperature
-float accellTemp;
-
 // Variables for voltage readings 电压读数变量
-uint16_t Vcc, Vin;
+uint16_t Vcc;
+float inputVoltage;
 
 // State variables 状态变量
 bool inLockMode = true;
@@ -119,32 +107,21 @@ uint32_t sleepmillis;
 uint32_t boostmillis;
 uint32_t buttonmillis;
 // PID timer
-uint32_t pidmillis{0};
 uint32_t goneMinutes;
 uint32_t goneSeconds;
 uint8_t SensorCounter = 0;
 
-// Setup u8g object depending on OLED controller
-// 根据OLED控制器设置u8g对象
-#if defined(SSD1306)
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE,
-                                         /* clock=*/22, /* data=*/21);
-#elif defined(SH1107)
-U8G2_SH1107_64X128_F_HW_I2C u8g2(U8G2_R1, 7);
-#else
-#error Wrong OLED controller type!
-#endif
 
 // Buffer for drawUTF8
 char F_Buffer[20];
 
+// accelerometer chip temperature
 float lastSENSORTmp = 0;
 float newSENSORTmp = 0;
 uint8_t SENSORTmpTime = 0;
 
 // ADC Calibrate
 uint16_t vref_adc0, vref_adc1;
-ESP32AnalogRead adc_vin;
 
 // Language
 uint8_t language = 0;
@@ -153,7 +130,6 @@ uint8_t language = 0;
 uint8_t hand_side = 0;
 
 // MSC Firmware
-FirmwareMSC MSC_Update;
 bool MSC_Updating_Flag = false;
 
 // Button2 Obj
@@ -161,9 +137,19 @@ bool MSC_Updating_Flag = false;
 
 uint32_t pwm_limit = 0;
 
-// Iron tipe heater object
-TipHeater heater(HEATER_PIN, HEATER_CHANNEL, HEATER_INVERT);
+// periodic check and activate/deactivate sleep modes
+Task tSleepCheck(TASK_SECOND, TASK_FOREVER, SLEEPCheck, &ts, true);
 
+// periodic update for the Input voltage value
+Task tUpdateInputVoltage(VIN_REFRESH_INTERVAL, TASK_FOREVER, [](){ inputVoltage = getVIN();}, &ts, true );
+
+// periodic checking for Iron tip presence, switch Iron modes
+Task tHeaterCheck(TASK_SECOND, TASK_FOREVER, thermostatCheck, &ts, true);
+
+// Motion sensor poller
+Task tMotionPoller(100, TASK_FOREVER, SENSORCheck, &ts, true);
+
+// *** Arduino setup ***
 void setup() {
   // set PD pins
   pinMode(PD_CFG_0, OUTPUT);
@@ -246,10 +232,6 @@ void setup() {
   // request configured voltage via PD trigger
   PD_Update();
 
-  // read supply voltages in mV 以mV为单位读取电源电压
-  delay(100);
-  Vin = getVIN();
-
   // set initial rotary encoder values 设置旋转编码器的初始值
   // a0 = PINB & 1; b0 = PIND >> 7 & 1; ab0 = (a0 == b0);
   a0 = 0;
@@ -278,7 +260,6 @@ void setup() {
   // accel.setDataRate(LIS2DH12_ODR_400Hz);
   // lis2dh12_fifo_mode_set(&(accel.dev_ctx), LIS2DH12_BYPASS_MODE);
 
-  accellTemp = getAccellTemp();
   lastSENSORTmp = getAccellTemp();
   u8g2.initDisplay();
   u8g2.begin();
@@ -296,7 +277,6 @@ void setup() {
   heater.setTargetTemp( DefaultTemp );
 }
 
-int SENSORCheckTimes = 0;
 long lastMillis = 0;
 long meas_cnt, meas_ms = 0;
 
@@ -308,28 +288,14 @@ void loop() {
     meas_ms = millis();
   }
 
+  ts.execute();
+
   long timems = millis();
   ROTARYCheck();  // check rotary encoder (temp/boost setting, enter setup menu)
                   // 检查旋转编码器(温度/升压设置，进入设置菜单)
-  SLEEPCheck();  // check and activate/deactivate sleep modes
-                 // 检查和激活/关闭睡眠模式
-
-  if (SENSORCheckTimes > 1) {
-    // long timems = millis();
-    SENSORCheck();  // reads temperature and vibration switch of the iron
-                    // 读取烙铁头的温度和振动开关
-    // lastMillis = millis() - timems;
-    // Serial.println(lastMillis);
-    SENSORCheckTimes = 0;
-  }
-  SENSORCheckTimes++;
-
-  if (timems - pidmillis > 100)
-    Thermostat();  // heater control 加热器控制
 
   MainScreen();  // updates the main page on the OLED 刷新OLED主界面
   lastMillis = millis() - timems;
-  //Serial.println(lastMillis);
 }
 
 // check rotary encoder; set temperature, toggle boost mode, enter setup menu
@@ -510,76 +476,12 @@ void SENSORCheck() {
       if (var[0] > varThreshold || var[1] > varThreshold ||
           var[2] > varThreshold) {
         handleMoved = true;
-        //      Serial.println("进入工作状态!");
+        LOGD(T_DBG, println, "Motion detected!");
       }
     }
   }
 
   // #endif
-
-  if (SensorCounter++ > 10) {
-    Vin = getVIN();  // get Vin every now and then 时不时去获取VIN电压
-    SensorCounter = 0;
-  }
-
-}
-
-void measureTipTemp(){
-/*
-  ledcWrite(HEATER_CHANNEL,
-            HEATER_OFF);  // shut off heater in order to measure
-                          // temperature 关闭加热器以测量温度
-  if (VoltageValue == 3) {
-    delay(TIME2SETTLE_20V/1000);
-  } else {
-    delay(TIME2SETTLE/1000);  // wait for voltage to settle 等待电压稳定
-  }
-  long timems = millis();
-  auto temp = denoiseAnalog(SENSOR_PIN);  // 读取ADC值的温度
-  lastMillis = millis() - timems;
-  // Serial.println(lastMillis);
-
-  RawTemp += (temp - RawTemp) * SMOOTHIE;  // stabilize ADC temperature reading 稳定ADC温度读数
-  calculateTemp();  // calculate real temperature value 计算实际温度值
-*/
-
-  // stabilize displayed temperature when around setpoint
-  // 稳定显示温度时，周围的设定值
-  ShowTemp = heater.getCurrentTemp();
-/*
-  if ((ShowTemp != heater.getTargetTemp()) || (abs(ShowTemp - heater.getCurrentTemp()) > 1))
-    ShowTemp = heater.getCurrentTemp();
-  if (abs(ShowTemp - heater.getTargetTemp()) <= 1) ShowTemp = heater.getTargetTemp();
-  if (inLockMode) {
-    ShowTemp = 0;
-  }
-*/
-
-  // set state variable if temperature is in working range; beep if working
-  // temperature was just reached
-  // 温度在工作范围内可设置状态变量;当工作温度刚刚达到时，会发出蜂鸣声
-  int gap = abs(heater.getTargetTemp() - heater.getCurrentTemp());
-  if (gap < 5) {
-    if (!isWorky && beepIfWorky) beep();
-    isWorky = true;
-    beepIfWorky = false;
-  } else
-    isWorky = false;
-
-  // checks if tip is present or currently inserted
-  // 检查烙铁头是否存在或当前已插入
-  if (ShowTemp > TEMP_NOTIP) TipIsPresent = false;  // tip removed ? 烙铁头移除？
-  if (!TipIsPresent && (ShowTemp < TEMP_NOTIP)) {  // new tip inserted ? 新的烙铁头插入？
-    //heater.disable();     // shut off heater 关闭加热器
-    beep();               // beep for info
-    TipIsPresent = true;  // tip is present now 烙铁头已经存在
-    ChangeTipScreen();    // show tip selection screen 显示烙铁头选择屏幕
-    update_EEPROM();      // update setting in EEPROM EEPROM的更新设置
-    handleMoved = true;   // reset all timers 重置所有计时器
-    //RawTemp = denoiseAnalog(SENSOR_PIN);  // restart temp smooth algorithm 重启临时平滑算法
-    c0 = LOW;             // switch must be released 必须松开开关
-    setRotary(TEMP_MIN, TEMP_MAX, TEMP_STEP, heater.getTargetTemp());  // reset rotary encoder 重置旋转编码器
-  }
 }
 
 // calculates real temperature value according to ADC reading and calibration
@@ -597,9 +499,8 @@ int32_t calculateTemp(float t) {
 }
 
 // controls the heater 控制加热器
-void Thermostat() {
-  // define heater TargetTemp according to current working mode
-  // 根据当前工作模式定义设定值
+void thermostatCheck() {
+  // define heater TargetTemp according to current working mode / 根据当前工作模式定义设定值
   if (inOffMode || inLockMode)
     heater.disable();
   else if (inSleepMode)
@@ -607,19 +508,32 @@ void Thermostat() {
   else if (inBoostMode) {
     heater.setTargetTemp( constrain(heater.getTargetTemp() + BoostTemp, 0, TEMP_MAX) );
   }
-  
-/*
-  // not sure what this is
-  if (SetTemp != DefaultTemp) {
-    DefaultTemp = SetTemp;  // 把设置里面的默认温度也修改了
-    update_default_temp_EEPROM();
+
+  // refresh displayed temp value
+  ShowTemp = heater.getCurrentTemp();
+
+  // set state variable if temperature is in working range; beep if working temperature has been just reached
+  // 温度在工作范围内可设置状态变量;当工作温度刚刚达到时，会发出蜂鸣声
+  int gap = abs(heater.getTargetTemp() - heater.getCurrentTemp());
+  if (gap < 5) {
+    if (!isWorky && beepIfWorky) beep();
+    isWorky = true;
+    beepIfWorky = false;
+  } else
+    isWorky = false;
+
+  // checks if tip is present or currently inserted
+  // 检查烙铁头是否存在或当前已插入
+  if (ShowTemp > TEMP_NOTIP) TipIsPresent = false;  // tip removed ? 烙铁头移除？
+  if (!TipIsPresent && (ShowTemp < TEMP_NOTIP)) {  // new tip inserted ? 新的烙铁头插入？
+    beep();               // beep for info
+    TipIsPresent = true;  // tip is present now 烙铁头已经存在
+    ChangeTipScreen();    // show tip selection screen 显示烙铁头选择屏幕
+    update_EEPROM();      // update setting in EEPROM EEPROM的更新设置
+    handleMoved = true;   // reset all timers 重置所有计时器
+    c0 = LOW;             // switch must be released 必须松开开关
+    setRotary(TEMP_MIN, TEMP_MAX, TEMP_STEP, heater.getTargetTemp());  // reset rotary encoder 重置旋转编码器
   }
-*/
-
-  // measure tip temperature, it will reset PWM duty to "0"
-  measureTipTemp();
-
-  pidmillis = millis();
 }
 
 // creates a short beep on the buzzer 在蜂鸣器上创建一个短的哔哔声
@@ -695,7 +609,6 @@ void MainScreen() {
     // rest depending on main screen type 休息取决于主屏幕类型
     if (MainScrType) {
       // draw current tip and input voltage 绘制当前烙铁头及输入电压
-      float fVin = (float)Vin / 1000;  // convert mv in V
       newSENSORTmp = newSENSORTmp + 0.01 * getAccellTemp();
       SENSORTmpTime++;
       if (SENSORTmpTime >= 100) {
@@ -707,14 +620,14 @@ void MainScreen() {
       u8g2.print(lastSENSORTmp, 1);
       u8g2.print(F("C"));
       u8g2.setCursor(83, 50);
-      u8g2.print(fVin, 1);
+      u8g2.print(inputVoltage/1000, 1);  // convert mv in V
       u8g2.print(F("V"));
       // draw current temperature 绘制当前温度
       u8g2.setFont(u8g2_font_freedoomr25_tn);
       u8g2.setFontPosTop();
       u8g2.setCursor(37, 18);
       if (ShowTemp > 500)
-        u8g2.print(F("000"));
+        u8g2.print("Err");
       else
         u8g2.printf("%03d", ShowTemp);
     } else {
@@ -1030,8 +943,6 @@ void InfoScreen() {
   bool lastbutton = (!digitalRead(BUTTON_PIN));
 
   do {
-    Vin = getVIN();                  // read supply voltage
-    float fVin = (float)Vin / 1000;  // convert mv in V
     float fTmp = getAccellTemp();      // read cold junction temperature
     u8g2.firstPage();
     do {
@@ -1046,7 +957,7 @@ void InfoScreen() {
       u8g2.print(F(" C"));
       u8g2.setCursor(0, 16 + SCREEN_OFFSET);
       u8g2.print(txt_voltage[language]);
-      u8g2.print(fVin, 1);
+      u8g2.print(getVIN()/1000, 1);               // convert mv in V
       u8g2.print(F(" V"));
       u8g2.setCursor(0, 16 * 2 + SCREEN_OFFSET);
       u8g2.print(txt_Version[language]);
@@ -1126,7 +1037,7 @@ void CalibrationScreen() {
     do {
       SENSORCheck();  // reads temperature and vibration switch of the iron
                       // 读取烙铁头的温度和振动开关
-      Thermostat();   // heater control
+      thermostatCheck();   // heater control
 
       u8g2.firstPage();
       do {
@@ -1271,20 +1182,15 @@ float getAccellTemp() {
 }
 
 // get supply voltage in mV 得到以mV为单位的电源电压
-uint16_t getVIN() {
-  long value;
-  long voltage;
-  long result = 0;
+float getVIN() {
+  uint32_t voltage = 0;
 
   for (uint8_t i = 0; i < 4; i++) {  // get 32 readings 得到32个读数
-    //    long val = analogRead(VIN_PIN);
-    long val = adc_vin.readMiliVolts();
-
-    result += val;  // add them up 把它们加起来
+    voltage += adc_vin.readMiliVolts();
   }
+  return voltage / 4 * 31.3f;
 
-  value = (result / 4);
-
+  //  some calibration calc
   //  // VIN_Ru = 100k, Rd_GND = 3.3K
   //  if (value < 500)
   //  {
@@ -1308,11 +1214,6 @@ uint16_t getVIN() {
   //  }
   //  else
   //    voltage = value * 1390 * 31.3 / 4095;
-
-  voltage = value * 31.3;
-
-  return voltage;
-  // return value;
 }
 
 int32_t variance(int16_t a[]) {

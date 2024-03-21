@@ -9,7 +9,7 @@ void getEEPROM();
 
 void PD_Update();
 
-uint16_t getVIN();
+float getVIN();
 
 /**
  * @brief Averaging 32 ADC readings to reduce noise
@@ -99,7 +99,7 @@ uint16_t InputScreen(const char *Items[][language_types]);
  * @brief controls the heater
  * 控制加热器
  */
-void Thermostat();
+void thermostatCheck();
 
 /**
  * @brief draws the main screen

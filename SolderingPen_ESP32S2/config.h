@@ -98,3 +98,8 @@
 
 //Hand side
 #define DEFAULT_HAND_SIDE 1
+
+
+// timers
+#define VIN_REFRESH_INTERVAL    500     // Vin readings period, ms
+
