@@ -34,14 +34,6 @@ void setRotary(int rmin, int rmax, int rstep, int rvalue);
 // 在蜂鸣器上创建一个短的哔哔声
 void beep();
 
-
-/**
- * @brief Read SENSOR internal temperature
- * 读取SENSOR内部温度
- * @return double 
- */
-float getAccellTemp();
-
 /**
  * @brief check rotary encoder; set temperature, toggle boost mode, enter setup menu// accordingly
  *  检查旋转编码器;设置温度，切换升压模式，进入设置菜单相应

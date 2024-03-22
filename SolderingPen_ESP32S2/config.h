@@ -25,6 +25,7 @@
 #define BUTTON_P_PIN      4     // 1 键位为“+”
 #define BUTTON_N_PIN      2     // 2 键位为“-”
 #define HEATER_PIN        5     // heater MOSFET PWM control 加热器MOSFET PWM控制
+#define SH1107_RST_PIN    7     // display reset pin
 
 // Heater PWM parameters
 #define HEATER_CHANNEL    LEDC_CHANNEL_2     // PWM channel

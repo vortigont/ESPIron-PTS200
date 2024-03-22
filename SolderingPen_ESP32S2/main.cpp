@@ -1,8 +1,8 @@
 //
-#include "config.h"
 #include "main.h"
 #include "ts.h"
 #include "heater.hpp"
+#include "sensors.hpp"
 #include "Languages.h"
 #include "const.h"
 #include "log.h"
@@ -23,21 +23,17 @@
 // https://github.com/madhephaestus/ESP32AnalogRead
 #include <ESP32AnalogRead.h>
 #include <EEPROM.h>  // 用于将用户设置存储到EEPROM
-#include "SparkFun_LIS2DH12.h"  //Click here to get the library: http://librarymanager/All#SparkFun_LIS2DH12
 
-#define LIS
-#define ACCEL_SAMPLES 32
 
 
 QC3Control QC(QC_DP_PIN, QC_DM_PIN);
-SPARKFUN_LIS2DH12 accel;
 // Setup u8g object depending on OLED controller
 // 根据OLED控制器设置u8g对象
 #if defined(SSD1306)
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE,
                                          /* clock=*/22, /* data=*/21);
 #elif defined(SH1107)
-U8G2_SH1107_64X128_F_HW_I2C u8g2(U8G2_R1, 7);
+U8G2_SH1107_64X128_F_HW_I2C u8g2(U8G2_R1, SH1107_RST_PIN);
 #else
 #error Wrong OLED controller type!
 #endif
@@ -47,10 +43,8 @@ ESP32AnalogRead adc_vin;
 // Iron tip heater object
 TipHeater heater(HEATER_PIN, HEATER_CHANNEL, HEATER_INVERT);
 
-int16_t gx = 0, gy = 0, gz = 0;
-uint16_t accels[32][3];
-uint8_t accelIndex = 0;
-
+// acceleration sensor
+GyroSensor accel;
 
 // Default value can be changed by user and stored in EEPROM
 // 用户可以更改并存储在EEPROM中的默认值
@@ -82,7 +76,6 @@ volatile uint8_t a0, b0, c0;
 volatile bool ab0;
 // button press counters
 volatile int count, countMin, countMax, countStep;
-volatile bool handleMoved;
 
 // Variables for temperature control 温度控制变量
 uint16_t ShowTemp, Step;
@@ -92,9 +85,8 @@ uint16_t Vcc;
 float inputVoltage;
 
 // State variables 状态变量
-bool inLockMode = true;
 bool inSleepMode = false;
-bool inOffMode = false;
+bool inOffMode = true;
 bool inBoostMode = false;
 bool inCalibMode = false;
 bool isWorky = true;
@@ -106,17 +98,13 @@ bool OledClear;
 uint32_t sleepmillis;
 uint32_t boostmillis;
 uint32_t buttonmillis;
-// PID timer
-uint32_t goneMinutes;
-uint32_t goneSeconds;
-uint8_t SensorCounter = 0;
 
 
 // Buffer for drawUTF8
 char F_Buffer[20];
 
 // accelerometer chip temperature
-float lastSENSORTmp = 0;
+float lastSENSORTmp{0};
 float newSENSORTmp = 0;
 uint8_t SENSORTmpTime = 0;
 
@@ -146,54 +134,32 @@ Task tUpdateInputVoltage(VIN_REFRESH_INTERVAL, TASK_FOREVER, [](){ inputVoltage 
 // periodic checking for Iron tip presence, switch Iron modes
 Task tHeaterCheck(TASK_SECOND, TASK_FOREVER, thermostatCheck, &ts, true);
 
-// Motion sensor poller
-Task tMotionPoller(100, TASK_FOREVER, SENSORCheck, &ts, true);
-
 // *** Arduino setup ***
 void setup() {
-  // set PD pins
+  // set PD trigger pins
   pinMode(PD_CFG_0, OUTPUT);
   pinMode(PD_CFG_1, OUTPUT);
   pinMode(PD_CFG_2, OUTPUT);
 
-  // start from default 5 volts
-  digitalWrite(PD_CFG_0, HIGH);
-/*
-  // request 20V configuration from PD
-  digitalWrite(PD_CFG_0, LOW);
-  digitalWrite(PD_CFG_1, HIGH);
-  digitalWrite(PD_CFG_2, LOW);
-*/
-
-  Serial.begin(115200);
-  Serial.setTxTimeoutMs(0);
-
-  adc_vin.attach(VIN_PIN);
-
-  /*#if defined(MPU)
-    mpu6050.begin();
-    mpu6050.calcGyroOffsets(true);*/
-
-  // #endif
-
-  // set the pin modes 设置引脚模式
+  // tip sensor pin
   pinMode(SENSOR_PIN, INPUT_PULLUP);
-  // pinMode(VIN_PIN, INPUT);
   pinMode(BUZZER_PIN, OUTPUT);
-  // pinMode(HEATER_PIN, OUTPUT);
+  // buttons pins
   pinMode(BUTTON_P_PIN, INPUT_PULLUP);
   pinMode(BUTTON_N_PIN, INPUT_PULLUP);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  // digitalWrite(BUZZER_PIN, LOW);        // must be LOW when buzzer not in
-  // use当蜂鸣器不使用时，必须是低电平
 
-  // get default values from EEPROM 从EEPROM获取默认值
-  //  if (!EEPROM.begin(EEPROM_SIZE))
-  //  {
-  //    Serial.println("failed to initialise EEPROM");
-  //    delay(100);
-  //  }
+  // start from default PD 5 volts
+  digitalWrite(PD_CFG_0, HIGH);
+
+  Serial.begin(115200);
+  Serial.setTxTimeoutMs(0);
+
+  // input voltage pin ADC
+  adc_vin.attach(VIN_PIN);
+
+  // init EEPROM 从EEPROM获取默认值
   init_EEPROM();
 
   // if all 3 buttons are pressed on boot, reset EEPROM configuration to defaults
@@ -244,23 +210,12 @@ void setup() {
   // long beep for setup completion 安装完成时长哔哔声
   beep();
   beep();
-  //  delay(2000);
+
   Serial.println("Soldering Pen");
-  // #elif defined(LIS)
-  //   u8g2.setBusClock(100000);
+
   Wire.begin();
   Wire.setClock(100000);  // 400000
-  if (accel.begin() == false) {
-    //delay(500);
-    Serial.println("Accelerometer not detected.");
-  }
-  // lis2dh12_block_data_update_set(&(accel.dev_ctx), PROPERTY_DISABLE);
-  // accel.setScale(LIS2DH12_2g);
-  // accel.setMode(LIS2DH12_HR_12bit);
-  // accel.setDataRate(LIS2DH12_ODR_400Hz);
-  // lis2dh12_fifo_mode_set(&(accel.dev_ctx), LIS2DH12_BYPASS_MODE);
 
-  lastSENSORTmp = getAccellTemp();
   u8g2.initDisplay();
   u8g2.begin();
   u8g2.sendF("ca", 0xa8, 0x3f);
@@ -275,9 +230,12 @@ void setup() {
   heater.init();
   // read and set saved iron temperature 读取和设置当前的烙铁头温度
   heater.setTargetTemp( DefaultTemp );
+
+  // run accelerator sensor
+  accel.setMotionThreshold(WAKEUPthreshold);
+  accel.begin();
 }
 
-long lastMillis = 0;
 long meas_cnt, meas_ms = 0;
 
 void loop() {
@@ -295,7 +253,6 @@ void loop() {
                   // 检查旋转编码器(温度/升压设置，进入设置菜单)
 
   MainScreen();  // updates the main page on the OLED 刷新OLED主界面
-  lastMillis = millis() - timems;
 }
 
 // check rotary encoder; set temperature, toggle boost mode, enter setup menu
@@ -303,7 +260,8 @@ void loop() {
 void ROTARYCheck() {
   // set working temperature according to rotary encoder value
   // 根据旋转编码器值设定工作温度
-  heater.setTargetTemp( getRotary() );
+  if (!inSleepMode && !inOffMode)
+    heater.setTargetTemp( getRotary() );
 
   uint8_t c = digitalRead(BUTTON_PIN);
   if (!c && c0) {
@@ -318,9 +276,10 @@ void ROTARYCheck() {
       if ((millis() - buttonmillis) >= 500) {
         SetupScreen();
       } else {
-        if (inLockMode) {
-          inLockMode = false;
-          heater.enable();
+        if (inOffMode) {
+          inOffMode = false;
+          heater.enable();    // enable Tip Heater
+          accel.enable();     // enable Gyro sensor
         } else {
           buttonmillis = millis();
           while ((digitalRead(BUTTON_PIN)) && ((millis() - buttonmillis) < 200))
@@ -329,18 +288,21 @@ void ROTARYCheck() {
             if (inOffMode) {
               // enable heater
               inOffMode = false;
+              inSleepMode = false;
               heater.enable();
+              accel.enable();
+              //u8g2.setPowerSave(0);
             } else {
               inBoostMode = !inBoostMode;
               if (inBoostMode) {
                 boostmillis = millis();
               }
-              handleMoved = true;
             }
           } else {  // double click
             // disable heater
             inOffMode = true;
             heater.disable();
+            accel.disable();
           }
         }
       }
@@ -350,8 +312,7 @@ void ROTARYCheck() {
 
   // check timer when in boost mode 在升温模式时检查计时器
   if (inBoostMode && timeOfBoost) {
-    goneSeconds = (millis() - boostmillis) / 1000;
-    if (goneSeconds >= timeOfBoost) {
+    if ((millis() - boostmillis) / 1000 >= timeOfBoost) {
       inBoostMode = false;  // stop boost mode 停止升温模式
       beep();  // beep if boost mode is over 如果升温模式结束，会发出蜂鸣声
       beepIfWorky = true;  // beep again when working temperature is reached
@@ -362,127 +323,49 @@ void ROTARYCheck() {
 
 // check and activate/deactivate sleep modes 检查和激活/关闭睡眠模式
 void SLEEPCheck() {
-  if (inLockMode) 
+  if (inOffMode)
     return;
 
-    if (handleMoved) {  // if handle was moved 如果手柄被移动
-      u8g2.setPowerSave(0);
+    if (accel.motionDetect()) {  // if handle was moved 如果手柄被移动
       if (inSleepMode) {  // in sleep or off mode? 在睡眠模式还是关机模式?
+/*
+        u8g2.setPowerSave(0);
         pwm_limit = POWER_LIMIT_20;
         if (VoltageValue < 3) {
           pwm_limit = POWER_LIMIT_15;
         }
         heater.enable();
+*/
         beep();              // beep on wake-up
         beepIfWorky = true;  // beep again when working temperature is reached
                              // 当达到工作温度，会发出蜂鸣声
+        inSleepMode = false;  // reset sleep flag
       }
-      handleMoved = false;  // reset handleMoved flag
-      inSleepMode = false;  // reset sleep flag
+      //handleMoved = false;  // reset handleMoved flag
       //      inOffMode = false;      // reset off flag
-      sleepmillis = millis();  // reset sleep timer
+      // reset sleep timer
+      sleepmillis = millis();
     }
+
 
     // check time passed since the handle was moved 检查把手被移动后经过的时间
-    goneSeconds = (millis() - sleepmillis) / 1000;
-    if ((!inSleepMode) && (time2sleep > 0) && (goneSeconds >= time2sleep)) {
+    auto motionlesstime = (millis() - sleepmillis) / 1000;
+    if ((!inSleepMode) && (time2sleep > 0) && (motionlesstime >= time2sleep)) {
+      LOGI(T_DBG, printf, "Switch to sleep temp:%u due to sleep timeout of %u sec\n", SleepTemp, time2sleep);
       inSleepMode = true;
-      heater.setTargetTemp(SleepTemp);
       beep();
     } else if ((!inOffMode) && (time2off > 0) &&
-               ((goneSeconds / 60) >= time2off)) {
+               ((motionlesstime / 60) >= time2off)) {
+      inSleepMode = false;
       inOffMode = true;
-      heater.disable();
-      u8g2.setPowerSave(1);
+      //u8g2.setPowerSave(1);
       beep();
+      LOGI(T_DBG, println, "Switch-Off due to idle timeout");
     }
 
 }
 
-// reads temperature, vibration switch and supply voltages
-// 读取温度，振动开关和电源电压
-void SENSORCheck() {
-  /*#if defined(MPU)
-    mpu6050.update();
-    if (abs(mpu6050.getGyroX() - gx) > WAKEUP_THRESHOLD ||
-    abs(mpu6050.getGyroY() - gy) > WAKEUP_THRESHOLD || abs(mpu6050.getGyroZ() -
-    gz) > WAKEUP_THRESHOLD)
-    {
-      gx = mpu6050.getGyroX();
-      gy = mpu6050.getGyroY();
-      gz = mpu6050.getGyroZ();
-      handleMoved = true;
-      Serial.println("进入工作状态!");
-    }*/
-  // #if defined(LIS)
 
-  // if (abs(accel.getX() - gx) > WAKEUPthreshold ||
-  //     abs(accel.getY() - gy) > WAKEUPthreshold ||
-  //     abs(accel.getZ() - gz) > WAKEUPthreshold) {
-  //   gx = accel.getX();
-  //   gy = accel.getY();
-  //   gz = accel.getZ();
-  //   handleMoved = true;
-  //   //    Serial.println("进入工作状态!");
-  // }
-
-  // accel.getRawX() return int16_t
-
-  if (accel.available()) {
-    accels[accelIndex][0] = accel.getRawX() + 32768;
-    accels[accelIndex][1] = accel.getRawY() + 32768;
-    accels[accelIndex][2] = accel.getRawZ() + 32768;
-    accelIndex++;
-
-    // debug output
-    // Serial.print("X: ");
-    // Serial.print(accels[accelIndex][0]);
-    // Serial.print(" Y: ");
-    // Serial.print(accels[accelIndex][1]);
-    // Serial.print(" Z: ");
-    // Serial.println(accels[accelIndex][2]);
-
-    if (accelIndex >= ACCEL_SAMPLES) {
-      accelIndex = 0;
-      // cal variance
-      uint64_t avg[3] = {0, 0, 0};
-      for (int i = 0; i < ACCEL_SAMPLES; i++) {
-        avg[0] += accels[i][0];
-        avg[1] += accels[i][1];
-        avg[2] += accels[i][2];
-      }
-      avg[0] /= ACCEL_SAMPLES;
-      avg[1] /= ACCEL_SAMPLES;
-      avg[2] /= ACCEL_SAMPLES;
-      uint64_t var[3] = {0, 0, 0};
-      for (int i = 0; i < ACCEL_SAMPLES; i++) {
-        var[0] += (accels[i][0] - avg[0]) * (accels[i][0] - avg[0]);
-        var[1] += (accels[i][1] - avg[1]) * (accels[i][1] - avg[1]);
-        var[2] += (accels[i][2] - avg[2]) * (accels[i][2] - avg[2]);
-      }
-      var[0] /= ACCEL_SAMPLES;
-      var[1] /= ACCEL_SAMPLES;
-      var[2] /= ACCEL_SAMPLES;
-      // debug output
-      // Serial.print("variance: ");
-      // Serial.print(var[0]);
-      // Serial.print(" ");
-      // Serial.print(var[1]);
-      // Serial.print(" ");
-      // Serial.println(var[2]);
-
-      int varThreshold = WAKEUPthreshold * 10000;
-
-      if (var[0] > varThreshold || var[1] > varThreshold ||
-          var[2] > varThreshold) {
-        handleMoved = true;
-        LOGD(T_DBG, println, "Motion detected!");
-      }
-    }
-  }
-
-  // #endif
-}
 
 // calculates real temperature value according to ADC reading and calibration
 // values 根据ADC读数和校准值，计算出真实的温度值
@@ -501,7 +384,7 @@ int32_t calculateTemp(float t) {
 // controls the heater 控制加热器
 void thermostatCheck() {
   // define heater TargetTemp according to current working mode / 根据当前工作模式定义设定值
-  if (inOffMode || inLockMode)
+  if (inOffMode)
     heater.disable();
   else if (inSleepMode)
     heater.setTargetTemp(SleepTemp);
@@ -530,7 +413,7 @@ void thermostatCheck() {
     TipIsPresent = true;  // tip is present now 烙铁头已经存在
     ChangeTipScreen();    // show tip selection screen 显示烙铁头选择屏幕
     update_EEPROM();      // update setting in EEPROM EEPROM的更新设置
-    handleMoved = true;   // reset all timers 重置所有计时器
+    //handleMoved = true;   // reset all timers 重置所有计时器
     c0 = LOW;             // switch must be released 必须松开开关
     setRotary(TEMP_MIN, TEMP_MAX, TEMP_STEP, heater.getTargetTemp());  // reset rotary encoder 重置旋转编码器
   }
@@ -590,9 +473,9 @@ void MainScreen() {
     }
     // draw status of heater 绘制加热器状态
     u8g2.setCursor(96, 0 + SCREEN_OFFSET);
-    if (ShowTemp > 500)
+    if (ShowTemp > TEMP_NOTIP)
       u8g2.print(txt_error[language]);
-    else if (inOffMode || inLockMode)
+    else if (inOffMode)
       u8g2.print(txt_off[language]);
     else if (inSleepMode)
       u8g2.print(txt_sleep[language]);
@@ -609,7 +492,7 @@ void MainScreen() {
     // rest depending on main screen type 休息取决于主屏幕类型
     if (MainScrType) {
       // draw current tip and input voltage 绘制当前烙铁头及输入电压
-      newSENSORTmp = newSENSORTmp + 0.01 * getAccellTemp();
+      newSENSORTmp = newSENSORTmp + 0.01 * accel.getAccellTemp();
       SENSORTmpTime++;
       if (SENSORTmpTime >= 100) {
         lastSENSORTmp = newSENSORTmp;
@@ -636,7 +519,7 @@ void MainScreen() {
       u8g2.setFontPosTop();
       u8g2.setCursor(15, 20);
       if (ShowTemp > 500)
-        u8g2.print(F("000"));
+        u8g2.print("Err");
       else
         u8g2.printf("%03d", ShowTemp);
     }
@@ -734,7 +617,6 @@ void SetupScreen() {
     }
   }
   update_EEPROM();
-  handleMoved = true;
   heater.enable();
   setRotary(TEMP_MIN, TEMP_MAX, TEMP_STEP, heater.getTargetTemp());
 }
@@ -816,6 +698,7 @@ void TimerScreen() {
       case 3:
         setRotary(0, 50, 5, WAKEUPthreshold);
         WAKEUPthreshold = InputScreen(WAKEUPthresholdItems);
+        accel.setMotionThreshold(WAKEUPthreshold);
         break;
       default:
         repeat = false;
@@ -943,7 +826,7 @@ void InfoScreen() {
   bool lastbutton = (!digitalRead(BUTTON_PIN));
 
   do {
-    float fTmp = getAccellTemp();      // read cold junction temperature
+    float fTmp = accel.getAccellTemp();      // read cold junction temperature
     u8g2.firstPage();
     do {
       u8g2.setFont(PTS200_16);
@@ -1035,8 +918,6 @@ void CalibrationScreen() {
     bool lastbutton = (!digitalRead(BUTTON_PIN));
 
     do {
-      SENSORCheck();  // reads temperature and vibration switch of the iron
-                      // 读取烙铁头的温度和振动开关
       thermostatCheck();   // heater control
 
       u8g2.firstPage();
@@ -1083,7 +964,7 @@ void CalibrationScreen() {
   } else {
     delayMicroseconds(TIME2SETTLE);  // wait for voltage to settle 等待电压稳定
   }
-  CalTempNew[3] = getAccellTemp();  // read chip temperature 读芯片温度
+  CalTempNew[3] = accel.getAccellTemp();  // read chip temperature 读芯片温度
   if ((CalTempNew[0] + 10 < CalTempNew[1]) &&
       (CalTempNew[1] + 10 < CalTempNew[2])) {
     if (MenuScreen(StoreItems, sizeof(StoreItems), 0)) {
@@ -1169,16 +1050,6 @@ void AddTipScreen() {
     CalTemp[CurrentTip][3] = TEMPCHP;
   } else
     MessageScreen(MaxTipMessage, sizeof(MaxTipMessage));
-}
-
-// get LIS/MPU temperature 获取LIS/MPU的温度
-float getAccellTemp() {
-#if defined(MPU)
-  mpu6050.update();
-  return mpu6050.getTemp();
-#elif defined(LIS)
-  return accel.getTemperature();
-#endif
 }
 
 // get supply voltage in mV 得到以mV为单位的电源电压
