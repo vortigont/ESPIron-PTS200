@@ -1,4 +1,23 @@
-# Songguo PTS200 
+# ESPIron PTS200
+
+Firmware for [Feizer PTS200](https://www.aliexpress.com/store/1102411999) soldering iron.
+
+I've started this project as a fork of [Songguo PTS200](https://github.com/Eddddddddy/Songguo-PTS200) to completely rework original firmware.
+My goals is to create a well-structured firmware with a flexible design.
+
+Currently project is in it's early development stage, mostly refactoring original firmware. Additional features and UI redesign will follow.
+
+WIP:
+ - turn Arduino's ino file into a set of cpp and header files
+ - create sepparate class instances for heater, sensors, etc...
+ - sepparate activities into independent tasks and RTOS threads
+ - use full-range PWM for heater
+ - enabled PID control for PWM (not optimized yet)
+ - revised temperture probes scheduling
+ - exclude useless tight loops
+ - add tunable debugging messages
+
+
 ## Introduction
 1. PD3.0 and QC3 fast charge protocol
 
