@@ -1,3 +1,5 @@
+[![PlatformIO CI](https://github.com/vortigont/ESPIron-PTS200/actions/workflows/pio_build.yml/badge.svg)](https://github.com/vortigont/ESPIron-PTS200/actions/workflows/pio_build.yml)
+
 # ESPIron PTS200
 
 Firmware for [Feizer PTS200](https://www.aliexpress.com/store/1102411999) soldering iron.

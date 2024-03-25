@@ -6,6 +6,7 @@
 .vscode
 .DS_Store
 .idea
+.lnk
 platformio_*.ini
 SolderingPen_ESP32S2/build
 SolderingPen_ESP32S2/.idea
