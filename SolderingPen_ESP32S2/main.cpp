@@ -1,5 +1,6 @@
 //
 #include "main.h"
+#include "evtloop.h"
 #include "ts.h"
 #include "heater.hpp"
 #include "sensors.hpp"
@@ -155,6 +156,11 @@ void setup() {
 
   Serial.begin(115200);
   Serial.setTxTimeoutMs(0);
+
+  // Start event loop task
+  evt::start();
+  // event bus sniffer
+  //evt::debug();
 
   // input voltage pin ADC
   adc_vin.attach(VIN_PIN);
