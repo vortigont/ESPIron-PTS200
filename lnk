@@ -1,0 +1,27 @@
+#!/bin/sh
+
+PROJ=pts200
+
+#echo "making link"
+#rm -rf .pio
+if ! test -d ~/tmpfs/zram/$PROJ ; then
+    echo "making zram dirs"
+    mkdir -p ~/tmpfs/zram/$PROJ/build ~/tmpfs/zram/$PROJ/libdeps
+fi
+
+if ! test -d .pio ; then
+    echo "making .pio dir"
+    mkdir .pio
+fi
+
+if ! test -d .pio/build || ! test -L .pio/build ; then
+    echo "symlinking to temp dir"
+    rm -rf ./.pio/build
+    ln -s ~/tmpfs/zram/$PROJ/build .pio/build
+fi
+
+#if ! test -d .pio/libdeps || ! test -L .pio/libdeps ; then
+#    rm -rf ./.pio/libdeps
+#    ln -s ~/tmpfs/zram/$PROJ/build .pio/libdeps
+#fi
+
