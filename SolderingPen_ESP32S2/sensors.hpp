@@ -4,8 +4,10 @@
 // https://github.com/sparkfun/SparkFun_LIS2DH12_Arduino_Library
 #include "SparkFun_LIS2DH12.h"
 #include "ts.h"
+#include "evtloop.hpp"
+#include "freertos/timers.h"
 
-#define ACCEL_SAMPLES 32
+#define GYRO_ACCEL_SAMPLES 32
 
 class GyroSensor {
   // G sensor axis metrics
@@ -15,14 +17,15 @@ class GyroSensor {
 
   bool _motion{false};
   int _motionThreshold{WAKEUP_THRESHOLD};
-  std::array<Gaxis, ACCEL_SAMPLES> samples;
+  std::array<Gaxis, GYRO_ACCEL_SAMPLES> samples;
   size_t accelIndex{0};
   //uint16_t accels[32][3];
 
   SPARKFUN_LIS2DH12 accel;
-  Task _tPoller;
-
-  void _poll();
+  // temperature polling timer
+  TimerHandle_t _tmr_temp = nullptr;
+  // accell sensor polling timer
+  TimerHandle_t _tmr_accel = nullptr;
 
   /**
    * @brief clear sampling array
@@ -30,7 +33,21 @@ class GyroSensor {
    */
   void _clear();
 
+  /**
+   * @brief poll temperature sensor inside accell chip and publish to event message bus
+   * 
+   */
+  void _temperature_poll();
+
+  /**
+   * @brief poll gyro sensor and detect motion
+   * 
+   */
+  void _accel_poll();
+
+
 public:
+  // d-tor
   ~GyroSensor();
 
   /**
@@ -77,3 +94,4 @@ public:
    */
   float getAccellTemp();
 };
+

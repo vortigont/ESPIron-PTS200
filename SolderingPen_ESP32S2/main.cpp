@@ -1,6 +1,5 @@
 //
 #include "main.h"
-#include "evtloop.h"
 #include "ts.h"
 #include "heater.hpp"
 #include "sensors.hpp"
@@ -156,6 +155,11 @@ void setup() {
 
   Serial.begin(115200);
   Serial.setTxTimeoutMs(0);
+
+#if PTS200_DEBUG_LEVEL > 3
+  // let ACM device intitialize
+  delay(3000);
+#endif
 
   // Start event loop task
   evt::start();

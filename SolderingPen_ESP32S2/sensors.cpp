@@ -3,11 +3,16 @@
 #include "log.h"
 
 #define LIS
-#define MOTION_FACTOR 25000
-#define MOTION_POLL_PERIOD    50  // ms
+#define ACCEL_MOTION_FACTOR 25000
+#define ACCEL_MOTION_POLL_PERIOD        50      // ms
+#define ACCEL_TEMPERATURE_POLL_PERIOD   1000    // ms
+
 
 GyroSensor::~GyroSensor(){
-  ts.deleteTask(_tPoller);
+  xTimerDelete( _tmr_temp, portMAX_DELAY );
+  xTimerDelete( _tmr_accel, portMAX_DELAY );
+  _tmr_temp = nullptr;
+  _tmr_accel = nullptr;
 };
 
 void GyroSensor::begin(){
@@ -15,9 +20,33 @@ void GyroSensor::begin(){
     LOGE(T_GYRO, println, "Accelerometer not detected.");
   }
 
-  _tPoller.set(MOTION_POLL_PERIOD, TASK_FOREVER, [this](){ _poll(); });
-  ts.addTask(_tPoller);
-  _tPoller.enable();
+//  _tPoller.set(ACCEL_MOTION_POLL_PERIOD, TASK_FOREVER, [this](){ _poll(); });
+//  ts.addTask(_tPoller);
+//  _tPoller.enable();
+
+  // start temperature polling
+  if (!_tmr_temp){
+    _tmr_temp = xTimerCreate("gyroT",
+                              pdMS_TO_TICKS(ACCEL_TEMPERATURE_POLL_PERIOD),
+                              pdTRUE,
+                              static_cast<void*>(this),
+                              [](TimerHandle_t h) { static_cast<GyroSensor*>(pvTimerGetTimerID(h))->_temperature_poll(); }
+                            );
+    if (_tmr_temp)
+      xTimerStart( _tmr_temp, pdMS_TO_TICKS(10) );
+  }
+
+  // start accl polling
+  if (!_tmr_accel){
+    _tmr_accel = xTimerCreate("gyroA",
+                              pdMS_TO_TICKS(ACCEL_MOTION_POLL_PERIOD),
+                              pdTRUE,
+                              static_cast<void*>(this),
+                              [](TimerHandle_t h) { static_cast<GyroSensor*>(pvTimerGetTimerID(h))->_accel_poll(); }
+                            );
+    // keep it disabled on begin
+    //xTimerStart( _tmr_accel, pdMS_TO_TICKS(10) );
+  }
 
   // lis2dh12_block_data_update_set(&(accel.dev_ctx), PROPERTY_DISABLE);
   // accel.setScale(LIS2DH12_2g);
@@ -32,7 +61,7 @@ bool GyroSensor::motionDetect(){
   return out;
 }
 
-void GyroSensor::_poll(){
+void GyroSensor::_accel_poll(){
   /*#if defined(MPU)
     mpu6050.update();
     if (abs(mpu6050.getGyroX() - gx) > WAKEUP_THRESHOLD ||
@@ -76,7 +105,7 @@ void GyroSensor::_poll(){
   // Serial.print(" Z: ");
   // Serial.println(accels[accelIndex][2]);
 
-  if (accelIndex != ACCEL_SAMPLES)
+  if (accelIndex != GYRO_ACCEL_SAMPLES)
     return;
 
   accelIndex = 0;
@@ -88,9 +117,9 @@ void GyroSensor::_poll(){
     avg[2] += i.z;
   }
 
-  avg[0] /= ACCEL_SAMPLES;
-  avg[1] /= ACCEL_SAMPLES;
-  avg[2] /= ACCEL_SAMPLES;
+  avg[0] /= GYRO_ACCEL_SAMPLES;
+  avg[1] /= GYRO_ACCEL_SAMPLES;
+  avg[2] /= GYRO_ACCEL_SAMPLES;
 
   uint32_t var[3] = {0, 0, 0};
   for (auto &i : samples){
@@ -99,9 +128,9 @@ void GyroSensor::_poll(){
     var[2] += (i.z - avg[2]) * (i.z - avg[2]);
   }
 
-  var[0] /= ACCEL_SAMPLES;
-  var[1] /= ACCEL_SAMPLES;
-  var[2] /= ACCEL_SAMPLES;
+  var[0] /= GYRO_ACCEL_SAMPLES;
+  var[1] /= GYRO_ACCEL_SAMPLES;
+  var[2] /= GYRO_ACCEL_SAMPLES;
 
   // debug output
   // Serial.print("variance: ");
@@ -111,13 +140,15 @@ void GyroSensor::_poll(){
   // Serial.print(" ");
   // Serial.println(var[2]);
 
-  int varThreshold = _motionThreshold * MOTION_FACTOR;
+  int varThreshold = _motionThreshold * ACCEL_MOTION_FACTOR;
 
   if (var[0] > varThreshold || var[1] > varThreshold || var[2] > varThreshold) {
     _motion = true;
     _clear();
     LOGD(T_GYRO, println, "motion detected!");
     LOGD(T_GYRO, printf, "Th:%d, x:%u, y:%u, z:%u\n", varThreshold, var[0], var[1], var[2]);
+    // post event with motion detect
+    EVT_POST(SENSOR_DATA, e2int(evt::iron_t::motion));
   }
 }
 
@@ -133,11 +164,13 @@ float GyroSensor::getAccellTemp() {
 
 void GyroSensor::enable(){
   _clear();
-  _tPoller.enable();
+  if (_tmr_accel)
+    xTimerStart( _tmr_accel, pdMS_TO_TICKS(10) );
 }
 
 void GyroSensor::disable(){
-  _tPoller.disable();
+  if (_tmr_accel)
+    xTimerStop( _tmr_accel, pdMS_TO_TICKS(10) );
 }
 
 void GyroSensor::_clear(){
@@ -147,4 +180,9 @@ void GyroSensor::_clear(){
   axis.z = accel.getRawZ() + 32768;
 
   samples.fill(axis);
+}
+
+void GyroSensor::_temperature_poll(){
+  float t =  getAccellTemp();
+  EVT_POST_DATA(SENSOR_DATA, e2int(evt::iron_t::acceltemp), &t, sizeof(t));
 }
