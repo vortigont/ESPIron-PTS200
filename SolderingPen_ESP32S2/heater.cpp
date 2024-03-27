@@ -104,6 +104,7 @@ void TipHeater::_runnerHndlr(){
     // skip cycle if heater is disabled or tip is missing
     if (!enabled || t > TEMP_NOTIP){
       _t.calibrated = t;
+      _t.avg = t;
       // set pwm to 0 if active
       if (ledc_get_duty(LEDC_MODE, _ledc_channel)){
         ledc_set_duty(LEDC_MODE, _ledc_channel, 0);
