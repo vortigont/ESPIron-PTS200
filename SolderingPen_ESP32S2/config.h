@@ -1,8 +1,8 @@
 #pragma once
 
 // Firmware version
-#define VERSION "v4.5.3" //20240130
-#define VERSION_NUM 422
+#define FW_VERSION "v0.0.1_experimental"
+#define FW_VERSION_NUM 422
 
 // Type of MOSFET
 #define P_MOSFET // P_MOSFET or N_MOSFET
@@ -21,9 +21,9 @@
 #define SENSOR_PIN        1     // tip temperature sense 烙铁头温感
 #define VIN_PIN           6     // input voltage sense 检测输入电压
 #define BUZZER_PIN        3     // buzzer 蜂鸣器
-#define BUTTON_PIN        0     // switch 按键right
-#define BUTTON_P_PIN      4     // 1 键位为“+”
-#define BUTTON_N_PIN      2     // 2 键位为“-”
+#define BUTTON_ACTION     GPIO_NUM_0     // middle push-button
+#define BUTTON_INCR       GPIO_NUM_2     // incrementer “+” push-button
+#define BUTTON_DECR       GPIO_NUM_4     // decrementer “-” push-button
 #define HEATER_PIN        5     // heater MOSFET PWM control 加热器MOSFET PWM控制
 #define SH1107_RST_PIN    7     // display reset pin
 
@@ -44,11 +44,11 @@
 
 // Default temperature control value (recommended soldering temperature: 300~380°C)
 // 默认温度控制值(推荐焊接温度:300~380°C)
-#define TEMP_MIN          50    // 最小温度
+#define TEMP_MIN          150   // 最小温度
 #define TEMP_MAX          450   // 最大温度
-#define TEMP_NOTIP        500   // virtual temperature when tip is not installed
-#define TEMP_DEFAULT      260   // 默认温度
-#define TEMP_SLEEP        150   // 休眠温度
+#define TEMP_NOTIP        500   // virtual temperature threshold when tip is not installed
+#define TEMP_DEFAULT      220   // 默认温度
+#define TEMP_SLEEP        120   // 休眠温度
 #define TEMP_BOOST        50    // 升温步进
 #define TEMP_STEP         10    // temperature change step / 旋转编码器温度变化步进
 #define POWER_LIMIT_15    170   // 功率限制
@@ -65,10 +65,11 @@
 #define TIPNAMELENGTH     6     // max length of tip names (including termination)
 #define TIPNAME           "PTS  " // default tip name
 
-// Default timer value (0 = disabled) / 默认的定时器值 (0 = 禁用)
-#define TIME2SLEEP        60    // sleep mode timer, seconds / 几秒钟后进入睡眠模式
-#define TIME2OFF          5     // off timer, minutes / 几分钟后就要关闭加热器了
-#define TIMEOFBOOST       60    // boos mode duration / 停留在加热模式多少秒
+// Default timeout values, in milliseconds
+#define TIMEOUT_STANDBY     60000       // standby time, when heater lowers it's temperature
+#define TIMEOUT_IDLE        300000      // idle mode timeout, when Iron switches off the heater after a certain period of inactivity
+#define TIMEOUT_SUSPEND     1200000     // suspend timeout
+#define TIMEOUT_BOOST       60000       // boost mode duration / 停留在加热模式多少秒
 #define WAKEUP_THRESHOLD  10    // MPU vibration detection accuracy, the smaller the value, the more sensitive it is / MPU 震动检测精度，数值越小，越灵敏
 
 // Control values
@@ -76,7 +77,7 @@
 #define TIME2SETTLE_20V   2000  // The time in microseconds allowed for the OpAmp output to stabilize / 以微秒为单位的时间允许OpAmp输出稳定
 #define SMOOTHIE          0.2   // OpAmp output smoothing coefficient (1=no smoothing; default: 0.05) / OpAmp输出平滑系数 (1=无平滑; 默认：0.05)
 //#define PID_ENABLE        true  // enable PID control
-#define PID_ENGAGE_DIFF   50    // temperature difference when PID algo should be engaged
+#define PID_ENGAGE_DIFF   30    // temperature difference when PID algo should be engaged
 #define BEEP_ENABLE       true  // enable/disable buzzer
 #define VOLTAGE_VALUE     3     // 电压值
 #define QC_ENABLE         false // enable/disable QC3.0

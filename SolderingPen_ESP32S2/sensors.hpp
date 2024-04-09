@@ -1,9 +1,8 @@
 #pragma once
 #include <array>
 #include "config.h"
-// https://github.com/sparkfun/SparkFun_LIS2DH12_Arduino_Library
-#include "SparkFun_LIS2DH12.h"
-#include "ts.h"
+#include "SparkFun_LIS2DH12.h"          // https://github.com/sparkfun/SparkFun_LIS2DH12_Arduino_Library
+#include "ESP32AnalogRead.h"            // https://github.com/madhephaestus/ESP32AnalogRead
 #include "evtloop.hpp"
 #include "freertos/timers.h"
 
@@ -16,7 +15,7 @@ class GyroSensor {
   };
 
   bool _motion{false};
-  int _motionThreshold{WAKEUP_THRESHOLD};
+  uint32_t _motionThreshold{WAKEUP_THRESHOLD};
   std::array<Gaxis, GYRO_ACCEL_SAMPLES> samples;
   size_t accelIndex{0};
   //uint16_t accels[32][3];
@@ -26,6 +25,8 @@ class GyroSensor {
   TimerHandle_t _tmr_temp = nullptr;
   // accell sensor polling timer
   TimerHandle_t _tmr_accel = nullptr;
+
+  esp_event_handler_instance_t _evt_set_handler = nullptr;
 
   /**
    * @brief clear sampling array
@@ -45,6 +46,9 @@ class GyroSensor {
    */
   void _accel_poll();
 
+  // events handler
+  void _eventHandler(esp_event_base_t base, int32_t id, void* data);
+
 
 public:
   // d-tor
@@ -54,7 +58,7 @@ public:
    * @brief initialize sensor
    * 
    */
-  void begin();
+  void init();
 
   /**
    * @brief enable motion sensor detector
@@ -95,3 +99,35 @@ public:
   float getAccellTemp();
 };
 
+
+/**
+ * @brief Input voltage sensor
+ * will measure Vin periodically and report via event bus
+ * 
+ */
+class VinSensor {
+  // RTOS polling timer
+  TimerHandle_t _tmr_runner = nullptr;
+
+  //esp_event_handler_instance_t _evt_set_handler = nullptr;
+
+  // ADC Calibrated Reader
+  ESP32AnalogRead adc_vin;
+
+  // events handler
+  void _eventHandler(esp_event_base_t base, int32_t id, void* data);
+
+  void _runner();
+
+public:
+  // d-tor
+  ~VinSensor();
+
+  /**
+   * @brief initialize sensor
+   * 
+   */
+  void init();
+
+
+};

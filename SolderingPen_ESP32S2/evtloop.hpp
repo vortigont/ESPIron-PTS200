@@ -40,11 +40,28 @@ enum class iron_t:int32_t {
 
   // Sensors data 100-199
   motion=100,               // motion detected from GyroSensor
-
   vin=110,                  // Vin voltage in millvolts, parameter uint32_t
-
   tiptemp=120,              // current Tip temperature, parameter int32_t
   acceltemp=121,            // accelerometer chip temperature, parameter float
+
+
+  // Commands
+  sensorsReload = 200,      // reload configuration for any sensors available
+  heaterTargetT,            // set heater target temperature, parameter int32_t
+  workTemp,                 // set working temperature, parameter int32_t
+  workModeToggle,           // toggle working mode on/off
+  boostModeToggle,          // toggle boost mode on/off
+
+  // State notifications
+  stateWorking = 300,
+  stateStandby,             // iron controller switched to 'Standby' mode
+  stateIdle,
+  stateSuspend,
+  stateBoost,
+  stateSetup,
+  stateNoTip,
+  tipEject,                 // sent by heater when it looses the tip sense
+  tipInsert,                // sent by heater when detect tip sensor
 
   // END
   noop_end                  // stub

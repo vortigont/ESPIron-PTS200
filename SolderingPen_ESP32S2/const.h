@@ -2,9 +2,23 @@
 
 // static literals are defined here
 
+// LOG tags
 static constexpr const char* T_ADC = "ADC";
 static constexpr const char* T_CTRL = "CTRL";
 static constexpr const char* T_DBG = "DBG";
 static constexpr const char* T_GYRO = "GYRO";
 static constexpr const char* T_PWM = "PWM";
 static constexpr const char* T_HEAT = "HEAT";
+
+// NVS namespaces
+static constexpr const char* T_IRON = "IRON";
+static constexpr const char* T_Sensor = "Sensor";
+static constexpr const char* T_UI = "UI";
+static constexpr const char* T_HID = "HID";
+
+// NVS keys
+static constexpr const char* T_timeouts = "timeouts";
+static constexpr const char* T_temperatures = "temperatures";
+
+static constexpr const char* T_motionThr = "motionThr";              // motion threshold (uint32)
+static constexpr const char* T_lang = "lang";                        // UI language
