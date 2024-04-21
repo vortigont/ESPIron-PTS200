@@ -128,7 +128,7 @@ void TipHeater::_runnerHndlr(){
       delay_time = measure_delay_ticks;
     } else {
       // heater must be either turned on or off
-      _t.calibrated < _t.target ? _pwm_duty = 1<<HEATER_RES : 0;
+      _pwm_duty = _t.calibrated < _t.target ? 1<<HEATER_RES : 0;
       _pid.clear();
       delay_time = long_measure_delay_ticks;
     }
