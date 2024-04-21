@@ -10,15 +10,22 @@
     (at your option) any later version.
 */
 #pragma once
+#include "MUIU8g2.h"
 
+
+#define MENU_MAIN_CFG_SIZE          8
+//#define GP_DICT_SIZE                7
+
+/*
 // List of available translations
-enum lang_index {
+enum lang_index : uint32_t {
     L_en_us = (0),
     L_ru_ru,
 //    L_zh_cn,
 //    L_zh_tw,
     L____SIZE
 };
+*/
 
 /**
  * Text-Dictionary Enums for language resources
@@ -30,6 +37,7 @@ enum dict_index {
     D_heating,
     D_idle,
     D_notip,
+    D_Settings,
     D_set_t,
     D_standby,
     D_____SIZE

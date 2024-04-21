@@ -13,9 +13,7 @@
 #include "common.hpp"
 #include "evtloop.hpp"
 #include "espasyncbutton.hpp"
-#include "lang/dictionaries.h"
-#include <memory>
-
+#include "muipp_u8g2.h"
 
 /**
  * @brief A generic screen object instance
@@ -24,13 +22,15 @@
  * Specific implementation depends on derived class
  */
 class VisualSet {
+
   esp_event_handler_instance_t _evt_handler = nullptr;
 
   // event dispatcher
   static void _event_picker(void* arg, esp_event_base_t base, int32_t id, void* event_data);
 
 protected:
-  lang_index lang{L_en_us};
+  // flag that shows a screen must be refreshed
+  bool refresh_req{true};
 
   // sensor events picker
   virtual void _evt_sensor(int32_t id, void* event_data){};
@@ -46,67 +46,31 @@ public:
   VisualSet();
   virtual ~VisualSet();
 
+  // MuiPlusPlus event sink, might be used in derrived classes
+  virtual mui_event muipp_event(mui_event e){ return {}; };
+
+  // draw on screen information
+  virtual void drawScreen() = 0;
 };
 
-
-/**
- * @brief Main Iron screen display
- * show working mode and basic sensors information
- * 
- */
-class VisualSetMainScreen : public VisualSet {
-  ironState_t _state{0};
-  int32_t _wrk_temp{0}, _tip_temp{0};
-  // sensor temp
-  float _sns_temp{0};
-  // input voltage
-  uint32_t _vin{0};
-
-  // renders Main working screen
-  void _drawMainScreen();
-
-  // sensor events handler
-  void _evt_sensor(int32_t id, void* data) override;
-
-  // notify events handler
-  void _evt_notify(int32_t id, void* data) override;
-
-  // command events handler
-  void _evt_cmd(int32_t id, void* data) override;
-
-  // state events handler
-  void _evt_state(int32_t id, void* data) override;
-
-public:
-  VisualSetMainScreen();
-
-};
-
-/**
- * @brief and object that controls the screen and generates visual info
- * 
- */
-class IronScreen {
-
-  bool _hand_side;
-
-  // an instance of visual oject that represents displayed info on a screen 
-  std::unique_ptr<VisualSet> _viset;
-
-public:
-
-  void init();
-
-};
 
 /**
  * @brief an object that manages button controls and Screen navigation
  * 
  */
 class IronHID {
+  // a set of availbale "screens"
+  enum class vset_t {
+    mainScreen = 0,
+    configMenu
+  };
 
-  // Display object
-  IronScreen _screen;
+  // Display object - an instance of visual set that represents displayed info on a screen 
+  std::unique_ptr<VisualSet> viset;
+  // screen redraw timer
+  TimerHandle_t _tmr_display = nullptr;
+  // flag that shows a screen must be refreshed
+  //bool refresh_req{true};
 
   // Two button pseudo-encoder
   PseudoRotaryEncoder _encdr;
@@ -124,7 +88,8 @@ class IronHID {
   esp_event_handler_instance_t _enc_evt_handler = nullptr;
 
   // target temperature
-  int32_t _wrk_temp;
+  Temperatures _temp;
+
 
   // encoder events executor, it works in cooperation with _menu object
   void _encoder_events(esp_event_base_t base, int32_t id, void* event_data);
@@ -136,10 +101,19 @@ class IronHID {
   void _switch_buttons_modes(uint32_t level);
 
   /**
+   * @brief initialize screen
+   * will set default VisualSet as a screen renderer
+   * 
+   */
+  void _init_screen();
+
+  /**
    * @brief button actions when iron is main working mode
    * 
    */
   void _menu_0_main_mode(ESPButton::event_t e, const EventMsg* m);
+
+  void _menu_1_config_navigation(ESPButton::event_t e, const EventMsg* m);
 
 public:
   // c-tor
@@ -153,8 +127,71 @@ public:
    */
   void init(const Temperatures& t);
 
+  /**
+   * @brief switch to another instance of VisualSet's object
+   * this method will spawn a new instance of screen renderer depending on requested paramenter
+   * 
+   */
+  void switchScreen(vset_t v = vset_t::mainScreen);
+
 };
 
 
+
+/**
+ * @brief Main Iron screen display
+ * show working mode and basic sensors information
+ * 
+ */
+class ViSet_MainScreen : public VisualSet {
+  ironState_t _state{0};
+  Temperatures _temp{0};
+  int32_t _tip_temp{0};
+  // sensor temp
+  float _sns_temp{0};
+  // input voltage
+  uint32_t _vin{0};
+
+  // renders Main working screen
+  void drawScreen() override;
+
+  // sensor events handler
+  void _evt_sensor(int32_t id, void* data) override;
+
+  // notify events handler
+  void _evt_notify(int32_t id, void* data) override;
+
+  // command events handler
+  void _evt_cmd(int32_t id, void* data) override;
+
+  // state events handler
+  void _evt_state(int32_t id, void* data) override;
+
+public:
+  ViSet_MainScreen();
+
+};
+
+/**
+ * @brief this class will draw and navigate through configuration menu
+ * 
+ */
+class ViSet_ConfigurationMenu : public VisualSet, public MuiPlusPlus {
+
+  void _build_menu();
+
+public:
+  ViSet_ConfigurationMenu();
+
+  // MuiPlusPlus event sink, might be used in derrived classes
+  mui_event muipp_event(mui_event e) override;
+
+  void drawScreen() override;
+
+};
+
+
+
+// **************************
 // Our global instance of HID
 extern IronHID hid;

@@ -57,7 +57,7 @@ enum class iron_t:int32_t {
   stateStandby,             // iron controller switched to 'Standby' mode
   stateIdle,
   stateSuspend,
-  stateBoost,
+  stateBoost,               // iron controller switched to 'Boost' mode, parameter uint32_t - seconds left to disable boost mode
   stateSetup,
   stateNoTip,
   tipEject,                 // sent by heater when it looses the tip sense

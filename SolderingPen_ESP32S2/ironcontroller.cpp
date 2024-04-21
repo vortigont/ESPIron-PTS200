@@ -114,11 +114,16 @@ void IronController::_mode_switcher(){
     }
 
     case ironState_t::boost : {
-      if (pdTICKS_TO_MS(xTaskGetTickCount()) - pdTICKS_TO_MS(_xTicks.boost) > _timeout.boost){
+      unsigned t = pdTICKS_TO_MS(xTaskGetTickCount()) - pdTICKS_TO_MS(_xTicks.boost);
+      if (t > _timeout.boost){
         _state = ironState_t::working;
         // notify other componets that we are switching to 'working' mode
         EVT_POST(IRON_NOTIFY, e2int(iron_t::stateWorking));
         LOGI(T_CTRL, printf, "Engage work mode due to boost timeout of %u ms\n", _timeout.boost);
+      } else {
+        // send notification with time left till boost is disabled (in seconds)
+        unsigned time_left = _timeout.boost - t; 
+        EVT_POST_DATA(IRON_NOTIFY, e2int(iron_t::stateBoost), &time_left, sizeof(time_left));
       }
     }
 
@@ -188,7 +193,7 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
           _state = ironState_t::boost;
           // notify other components
           LOGI(T_CTRL, println, "switch to Boost mode");
-          EVT_POST(IRON_NOTIFY, e2int(iron_t::stateBoost));
+          EVT_POST_DATA(IRON_NOTIFY, e2int(iron_t::stateBoost), &_timeout.boost, sizeof(_timeout.boost));
           // set heater to boost temperature
           int32_t t = _temp.working + _temp.boost;
           EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::heaterTargetT), &t, sizeof(t));

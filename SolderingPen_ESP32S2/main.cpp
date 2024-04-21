@@ -1,21 +1,24 @@
 //
-#include "main.h"
+#include "const.h"
 #include "ironcontroller.hpp"
 #include "heater.hpp"
 #include "sensors.hpp"
 #include "hid.hpp"
-#include "ts.h"
-#include "const.h"
+#include "main.h"
 #include "log.h"
 
 #include <QC3Control.h>
+#include "UtilsEEPROM.h"
+#ifdef CONFIG_TINYUSB_MSC_ENABLED
 #include "FirmwareMSC.h"
 #include "USB.h"
-#include "UtilsEEPROM.h"
+#endif
 
+
+#ifdef CONFIG_TINYUSB_MSC_ENABLED
 QC3Control QC(QC_DP_PIN, QC_DM_PIN);
-
 FirmwareMSC MSC_Update;
+#endif
 // Iron tip heater object
 TipHeater heater(HEATER_PIN, HEATER_CHANNEL, HEATER_INVERT);
 
@@ -77,11 +80,13 @@ void setup() {
   digitalWrite(PD_CFG_0, HIGH);
 
   Serial.begin(115200);
+#ifdef ARDUINO_USB_MODE
   Serial.setTxTimeoutMs(0);
+#endif
 
 #if PTS200_DEBUG_LEVEL > 3
   // let ACM device intitialize to catch early log output
-  delay(3000);
+  delay(4000);
 #endif
   LOGI(T_IRON, printf, "ESPIron PTS200 firmware version: %s\n", FW_VERSION);
 
@@ -106,6 +111,8 @@ void setup() {
   getEEPROM();
   // fake readings for now
   int VoltageValue = 20;
+
+#ifdef CONFIG_TINYUSB_MSC_ENABLED
   if (QCEnable) {
     QC.begin();
     delay(100);
@@ -129,124 +136,51 @@ void setup() {
         break;
     }
   }
+#endif
 
   // Initialize IronController
   espIron.init();
 
   // request configured voltage via PD trigger
-  PD_Update();
+  //PD_Update();
 
   // I2C bus (for display)
   Wire.begin();
   Wire.setClock(100000);  // 400000
 
   // initialize heater
-  heater.init();
+  //heater.init();
 
   // initialize acceleration sensor
-  accel.init();
+  //accel.init();
 
   // intit voltage sensor
-  vin.init();
+  //vin.init();
 
   // initialize HID (buttons controls and navigation, screen)
+  LOGI(T_IRON, println, "Init HID");
   hid.init(espIron.getTemperatures());
 
   // long beep for setup completion 安装完成时长哔哔声
   beep();
-  beep();
+  //beep();
 }
 
 void loop() {
-
-  ts.execute();
-
-  //ROTARYCheck();  // check rotary encoder (temp/boost setting, enter setup menu)
-                  // 检查旋转编码器(温度/升压设置，进入设置菜单)
-
-  //MainScreen();  // updates the main page on the OLED 刷新OLED主界面
+  // I do not need Arduino's loop, so this thread should be terminated
+  vTaskDelete(NULL);
 }
-/*
-// check rotary encoder; set temperature, toggle boost mode, enter setup menu
-// accordingly 检查旋转编码器;设置温度，切换升压模式，进入设置菜单相应
-void ROTARYCheck() {
-  // set working temperature according to rotary encoder value
-  // 根据旋转编码器值设定工作温度
-  if (!inSleepMode && !inOffMode)
-    heater.setTargetTemp( getRotary() );
-
-  uint8_t c = digitalRead(BUTTON_PIN);
-  if (!c && c0) {
-    delay(10);
-    if (digitalRead(BUTTON_PIN) == c) {
-      beep();
-      buttonmillis = millis();
-      delay(10);
-      while ((!digitalRead(BUTTON_PIN)) && ((millis() - buttonmillis) < 500))
-        ;
-      delay(10);
-      if ((millis() - buttonmillis) >= 500) {
-        SetupScreen();
-      } else {
-        if (inOffMode) {
-          inOffMode = false;
-          heater.enable();    // enable Tip Heater
-          accel.enable();     // enable Gyro sensor
-        } else {
-          buttonmillis = millis();
-          while ((digitalRead(BUTTON_PIN)) && ((millis() - buttonmillis) < 200))
-            delay(10);
-          if ((millis() - buttonmillis) >= 200) {  // single click
-            if (inOffMode) {
-              // enable heater
-              inOffMode = false;
-              inSleepMode = false;
-              heater.enable();
-              accel.enable();
-              //u8g2.setPowerSave(0);
-            } else {
-              inBoostMode = !inBoostMode;
-              if (inBoostMode) {
-                boostmillis = millis();
-              }
-            }
-          } else {  // double click
-            // disable heater
-            inOffMode = true;
-            heater.disable();
-            accel.disable();
-          }
-        }
-      }
-    }
-  }
-  c0 = c;
-
-  // check timer when in boost mode 在升温模式时检查计时器
-  if (inBoostMode && espIron._timeout.boost) {
-    if ((millis() - boostmillis) / 1000 >= espIron._timeout.boost) {
-      inBoostMode = false;  // stop boost mode 停止升温模式
-      beep();  // beep if boost mode is over 如果升温模式结束，会发出蜂鸣声
-      beepIfWorky = true;  // beep again when working temperature is reached
-                           // 当达到工作温度，会发出蜂鸣声
-    }
-  }
-}
-*/
-
-
-
 
 // creates a short beep on the buzzer 在蜂鸣器上创建一个短的哔哔声
 void beep() {
-  if (beepEnable) {
+//  if (beepEnable) {
     for (uint8_t i = 0; i < 255; i++) {
       digitalWrite(BUZZER_PIN, HIGH);
       delayMicroseconds(125);
       digitalWrite(BUZZER_PIN, LOW);
       delayMicroseconds(125);
     }
-  }
+//  }
 }
 
 // reads user settings from EEPROM; if EEPROM values are invalid, write defaults

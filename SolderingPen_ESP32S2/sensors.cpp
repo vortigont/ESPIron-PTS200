@@ -26,11 +26,8 @@ GyroSensor::~GyroSensor(){
 void GyroSensor::init(){
   if (!accel.begin()) {
     LOGE(T_GYRO, println, "Accelerometer not detected.");
+    return;
   }
-
-//  _tPoller.set(ACCEL_MOTION_POLL_PERIOD, TASK_FOREVER, [this](){ _poll(); });
-//  ts.addTask(_tPoller);
-//  _tPoller.enable();
 
   // start temperature polling
   if (!_tmr_temp){

@@ -24,3 +24,7 @@ static constexpr std::array< std::array<const char*, D_____SIZE>, L____SIZE> dic
     lang_ru_ru::dictionary
 };
 
+static constexpr std::array< std::array<const char*, MENU_MAIN_CFG_SIZE>, L____SIZE> menu_Main = {
+    lang_en_us::menu_MainConfiguration,
+    lang_ru_ru::menu_MainConfiguration
+};

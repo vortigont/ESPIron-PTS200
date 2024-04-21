@@ -35,9 +35,9 @@ namespace evt {
 #define LOOP_EVT_PRIORITY       1              // task priority is same as arduino's loop() to avoid extra context switches
 #define LOOP_EVT_RUNNING_CORE   tskNO_AFFINITY // ARDUINO_RUNNING_CORE
 #ifdef PTS200_DEBUG_LEVEL
- #define LOOP_EVT_STACK_SIZE     2048          // loop task stack size when debug is enabled, sprintf calls requires lots of mem
+ #define LOOP_EVT_STACK_SIZE     4096          // loop task stack size when debug is enabled, sprintf calls requires lots of mem
 #else
- #define LOOP_EVT_STACK_SIZE     1536          // loop task stack size
+ #define LOOP_EVT_STACK_SIZE     4096          // loop task stack size
 #endif
 
 void start(){
