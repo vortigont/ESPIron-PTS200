@@ -10,7 +10,7 @@ My goals is to create a well-structured firmware with a flexible design.
 Currently project is in it's early development stage, mostly refactoring original firmware. Additional features and UI redesign will follow.
 Work in progress code in [experimental](https://github.com/vortigont/ESPIron-PTS200/tree/ctrl) branch, no configuration UI currently.
 Discussion forum [thread](https://community.alexgyver.ru/threads/proshivka-dlja-pajalnika-feizer-pts200-v2-esp32.9930/) (in russian).
-
+Telegram group [LampDevs](https://t.me/LampDevs) (Russian)
 
 WIP:
  - turn Arduino's ino file into a set of cpp and header files
