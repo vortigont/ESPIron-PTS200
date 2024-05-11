@@ -1,6 +1,6 @@
 #pragma once
 #include <array>
-#include "config.h"
+#include "common.hpp"
 #include "SparkFun_LIS2DH12.h"          // https://github.com/sparkfun/SparkFun_LIS2DH12_Arduino_Library
 #include "ESP32AnalogRead.h"            // https://github.com/madhephaestus/ESP32AnalogRead
 #include "evtloop.hpp"

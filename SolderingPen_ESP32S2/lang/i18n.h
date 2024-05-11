@@ -13,8 +13,7 @@
 #include "MUIU8g2.h"
 
 
-#define MENU_MAIN_CFG_SIZE          8
-//#define GP_DICT_SIZE                7
+#define MENU_MAIN_CFG_SIZE          6
 
 /*
 // List of available translations
@@ -29,7 +28,7 @@ enum lang_index : uint32_t {
 
 /**
  * Text-Dictionary Enums for language resources
- * the order of enums must match with elements in dictionary
+ * the order of enums must match with elements in dictionary array
  */
 enum dict_index {
     D_boost = (0),
@@ -37,6 +36,7 @@ enum dict_index {
     D_heating,
     D_idle,
     D_notip,
+    D_return,
     D_Settings,
     D_set_t,
     D_standby,

@@ -8,7 +8,6 @@
 #include "log.h"
 
 #include <QC3Control.h>
-#include "UtilsEEPROM.h"
 #ifdef CONFIG_TINYUSB_MSC_ENABLED
 #include "FirmwareMSC.h"
 #include "USB.h"
@@ -95,9 +94,6 @@ void setup() {
   // event bus sniffer
   //evt::debug();
 
-  // init EEPROM 从EEPROM获取默认值
-  init_EEPROM();
-
 /*
   // if all 3 buttons are pressed on boot, reset EEPROM configuration to defaults
   // this does not makes much sense 'cause pressed gpio0 will put MCU into fash mode
@@ -107,8 +103,6 @@ void setup() {
   }
 */
 
-  // load configuration from eeprom
-  getEEPROM();
   // fake readings for now
   int VoltageValue = 20;
 
@@ -182,11 +176,6 @@ void beep() {
     }
 //  }
 }
-
-// reads user settings from EEPROM; if EEPROM values are invalid, write defaults
-// 从EEPROM读取用户设置;如果EEPROM值无效，则写入默认值
-void getEEPROM() { read_EEPROM(); }
-
 
 
 int32_t variance(int16_t a[]) {

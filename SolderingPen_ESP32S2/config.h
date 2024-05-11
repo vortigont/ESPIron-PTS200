@@ -13,10 +13,6 @@
 //typedef u8g2_uint_t u8g_uint_t;
 #define SCREEN_OFFSET     2
 
-// Type of rotary encoders / 旋转编码器的类型
-#define ROTARY_TYPE       0     // 0: 2 increments/step; 1: 4 increments/step (default)
-#define BUTTON_DELAY      5
-
 // Pins
 #define SENSOR_PIN        1     // tip temperature sense 烙铁头温感
 #define VIN_PIN           6     // input voltage sense 检测输入电压
@@ -26,13 +22,6 @@
 #define BUTTON_DECR       GPIO_NUM_4     // decrementer “-” push-button
 #define HEATER_PIN        5     // heater MOSFET PWM control 加热器MOSFET PWM控制
 #define SH1107_RST_PIN    7     // display reset pin
-
-// Heater PWM parameters
-#define HEATER_CHANNEL    LEDC_CHANNEL_2     // PWM channel
-#define HEATER_FREQ       200   // PWM frequency
-#define HEATER_HIGHFREQ   1000  // PWM frequency for 20V/50% PWM mode
-#define HEATER_RES        LEDC_TIMER_8_BIT     // PWM resolution
-
 // CH224K USB PD chip pins connection
 // https://components101.com/sites/default/files/component_datasheet/WCH_CH224K_ENG.pdf
 #define PD_CFG_0          16
@@ -41,6 +30,12 @@
 
 #define QC_DP_PIN         14
 #define QC_DM_PIN         13
+
+// Heater PWM parameters
+#define HEATER_CHANNEL    LEDC_CHANNEL_2     // PWM channel
+#define HEATER_FREQ       200   // PWM frequency
+//#define HEATER_HIGHFREQ   1000  // PWM frequency for 20V/50% PWM mode
+#define HEATER_RES        LEDC_TIMER_8_BIT     // PWM resolution
 
 // Default temperature control value (recommended soldering temperature: 300~380°C)
 // 默认温度控制值(推荐焊接温度:300~380°C)

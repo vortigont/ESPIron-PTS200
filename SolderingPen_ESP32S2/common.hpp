@@ -10,7 +10,12 @@
     (at your option) any later version.
 */
 #pragma once
+#if defined CUSTOM_CFG
+# include CUSTOM_CFG
+#warning "include custom cfg file"
+#else
 #include "config.h"
+#endif
 #include <stdint.h>
 
 enum class ironState_t {

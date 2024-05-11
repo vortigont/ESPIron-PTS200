@@ -473,11 +473,61 @@ void ViSet_ConfigurationMenu::_build_menu(){
   LOGD(T_HID, println, "Build menu");
 
   // create page with Settings options list
-  muiItem_id cfg_page = makePage(dictionary[D_Settings]);
+  muiItemId page_mainmenu = makePage(dictionary[D_Settings]);
 
-#define MAKE_ITEM(ITEM_TYPE, ARG, PAGE) { std::unique_ptr<MuiItem> p = std::make_unique< ITEM_TYPE > ARG; addMuippItem(std::move(p), PAGE); }
+  // create page "Settings->Temperature"
+  muiItemId page_set_temp = makePage(menu_MainConfiguration.at(0), page_mainmenu);
 
-  MAKE_ITEM( MuiItem_U8g2_PageTitle, (u8g2, nextIndex(), MAIN_MENU_FONT1 ), cfg_page);    // u8g2_font_unifont_t_chinese3
+  // create page "Settings->Timers"
+  muiItemId page_set_time = makePage(menu_MainConfiguration.at(1), page_mainmenu);
+
+  // create page "Settings->Tip"
+  muiItemId page_set_tip = makePage(menu_MainConfiguration.at(2), page_mainmenu);
+
+  // create page "Settings->Power"
+  muiItemId page_set_pwr = makePage(menu_MainConfiguration.at(3), page_mainmenu);
+
+  // create page "Settings->Info"
+  muiItemId page_set_info = makePage(menu_MainConfiguration.at(4), page_mainmenu);
+
+
+  // #define MAKE_ITEM(ITEM_TYPE, ARG, PAGE) { std::unique_ptr<MuiItem> p = std::make_unique< ITEM_TYPE > ARG; addMuippItem(std::move(p), PAGE); }
+  // MAKE_ITEM( MuiItem_U8g2_PageTitle, (u8g2, nextIndex(), MAIN_MENU_FONT1 ), page_mainmenu);    // u8g2_font_unifont_t_chinese3
+
+  // generate idx for "Page title" item
+  muiItemId page_title_id = nextIndex();
+  // create "Page title" item
+  MuiItem_pt p = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, page_title_id, MAIN_MENU_FONT1 );
+  // add item to menu and bind it to "Main Settings" page
+  addMuippItem(std::move(p), page_mainmenu);
+
+  // bind  "Page title" item with "Settings->Temperature" page
+  addItemToPage(page_title_id, page_set_temp);
+  // bind  "Page title" item with "Settings->Timers" page
+  addItemToPage(page_title_id, page_set_time);
+  // bind  "Page title" item with "Settings->Tip" page
+  addItemToPage(page_title_id, page_set_tip);
+  // bind  "Page title" item with "Settings->Power" page
+  addItemToPage(page_title_id, page_set_pwr);
+  // bind  "Page title" item with "Settings->Info" page
+  addItemToPage(page_title_id, page_set_info);
+
+  // generate idx for "Back Button" item
+  muiItemId bbuton_id = nextIndex();
+  // create "Back Button" item
+  MuiItem_pt bb = std::make_shared< MuiItem_U8g2_BackButton > (u8g2, bbuton_id, dictionary[D_return], MAIN_MENU_FONT1, PAGE_BACK_BTN_X_OFFSET, PAGE_BACK_BTN_Y_OFFSET);
+
+  // add item to menu and bind it to "Settings->Temperature" page
+  addMuippItem(std::move(bb), page_set_temp);
+
+  // bind  "Back Button" item with "Settings->Timers" page
+  addItemToPage(bbuton_id, page_set_time);
+  // bind  "Back Button" item with "Settings->Tip" page
+  addItemToPage(bbuton_id, page_set_tip);
+  // bind  "Back Button" item with "Settings->Power" page
+  addItemToPage(bbuton_id, page_set_pwr);
+  // bind  "Back Button" item with "Settings->Info" page
+  addItemToPage(bbuton_id, page_set_info);
 
   //std::unique_ptr<MuiItem> p = std::make_unique<MuiItem_U8g2_PageTitle>(u8g2, muipp.nextIndex(), u8g2_font_unifont_t_chinese3);
   //muipp.addMuippItem(std::move(p), cfg_page);
@@ -492,16 +542,32 @@ void ViSet_ConfigurationMenu::_build_menu(){
   //muipp.addMuippItem(std::move(p), cfg_page);
 
   // create and add to main page a list with settings selection options
-  muiItem_id menu_scroll_item = nextIndex();
-  std::unique_ptr<MuiItem> p = std::make_unique<MuiItem_U8g2_DynamicList>(u8g2, menu_scroll_item,
+  muiItemId menu_scroll_item = nextIndex();
+/*
+  std::unique_ptr<MuiItem> p = std::make_unique<MuiItem_U8g2_DynamicScrollList>(u8g2, menu_scroll_item,
     [](size_t index){ Serial.printf("idx:%u\n", index); return menu_MainConfiguration.at(index); },   // this lambda will feed localized strings to the MuiItem list builder class
     menu_MainConfiguration.size(),
     MAIN_MENU_Y_SHIFT, 3,                                           // offset for each line of text and total number of lines in menu
     MAIN_MENU_FONT2, MAIN_MENU_FONT3, MAIN_MENU_X_OFFSET, MAIN_MENU_Y_OFFSET
   );
-  addMuippItem(std::move(p), cfg_page);
+*/
+  MuiItem_U8g2_DynamicScrollList *menu = new MuiItem_U8g2_DynamicScrollList(u8g2, menu_scroll_item,
+    [](size_t index){ /* Serial.printf("idx:%u\n", index); */ return menu_MainConfiguration.at(index); },   // this lambda will feed localized strings to the MuiItem list builder class
+    [](){ return menu_MainConfiguration.size(); },
+    nullptr,                                                        // action callback
+    MAIN_MENU_Y_SHIFT, 3,                                           // offset for each line of text and total number of lines in menu
+    MAIN_MENU_X_OFFSET, MAIN_MENU_Y_OFFSET,                         // x,y cursor
+    MAIN_MENU_FONT2, MAIN_MENU_FONT3
+  );
 
-  menuStart(cfg_page, menu_scroll_item);
+  // set dynamic list will act as page selector
+  menu->listopts.page_selector = true;
+  // move menu object into MuiPP page
+  addMuippItem(menu, page_mainmenu);
+  // page_mainmenu
+  pageAutoSelect(page_mainmenu, menu_scroll_item);
+
+  menuStart(page_mainmenu, menu_scroll_item);
 }
 
 
@@ -520,12 +586,11 @@ void ViSet_ConfigurationMenu::drawScreen(){
 mui_event ViSet_ConfigurationMenu::muipp_event(mui_event e) {
   //LOGD(T_HID, printf, "Got event for muipp lvl:1 e:%u\n", e.eid);
 
+  // forward those messages to muipp
+  auto reply = muiEvent(e);
   // any event will trigger screen refresh
   refresh_req = true;
-
-  //return {};
-  // forward those messages to muipp
-  return muiEvent(e);
+  return reply;
 }
 
 
