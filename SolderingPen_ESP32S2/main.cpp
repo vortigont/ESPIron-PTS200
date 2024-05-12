@@ -153,7 +153,7 @@ void setup() {
 
   // initialize HID (buttons controls and navigation, screen)
   LOGI(T_IRON, println, "Init HID");
-  hid.init(espIron.getTemperatures());
+  hid.init();
 
   // long beep for setup completion 安装完成时长哔哔声
   beep();

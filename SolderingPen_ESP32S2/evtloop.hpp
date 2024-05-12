@@ -23,6 +23,7 @@ ESP_EVENT_DECLARE_BASE(IRON_SET_EVT);       // ESPIron setter Commands events ba
 ESP_EVENT_DECLARE_BASE(IRON_GET_EVT);       // ESPIron getter Commands events base (in reply to this command, an IRON_STATE_EVT could be generated)
 ESP_EVENT_DECLARE_BASE(IRON_NOTIFY);        // ESPIron notification events base (those events are published when some state or mode changes due to any commands or component's logic)
 ESP_EVENT_DECLARE_BASE(IRON_STATE);         // ESPIron State publishing events base (those events are published on IRON_GET_EVT requests on demand)
+ESP_EVENT_DECLARE_BASE(IRON_VISET);         // ESPIron VisualSet HID events
 
 // cast enum to int
 template <class E>

@@ -19,7 +19,7 @@
 // 10x14 OK!
 #define MAIN_MENU_FONT2     u8g2_font_smart_patrol_nbp_tr
 // 10x14 OK!
-#define MAIN_MENU_FONT3     u8g2_font_smart_patrol_nbp_tr
+#define MAIN_MENU_FONT3     u8g2_font_unifont_t_cyrillic
 
 // 12x17
 //#define MAIN_MENU_FONT3     u8g2_font_shylock_nbp_t_all
@@ -102,5 +102,6 @@ static constexpr std::array<const char *, MENU_TEMPERATURE_CFG_SIZE> menu_Temper
     lang_en_us::T_Temp_SaveLastWrk,
     lang_en_us::T_TempDefltWrk,
     lang_en_us::T_TempSleep,
-    lang_en_us::T_TempBoost
+    lang_en_us::T_TempBoost,
+    lang_en_us::T_return
 };

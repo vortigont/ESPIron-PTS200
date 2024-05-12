@@ -52,10 +52,22 @@ U8G2_SH1107_64X128_F_HW_I2C u8g2(U8G2_R1, SH1107_RST_PIN);
 #define Y_OFFSET_VIN              50
 
 
-// shortcut alias
+// shortcut type aliases
 using ESPButton::event_t;
 using evt::iron_t;
 
+//  *********************
+//  ***   IronHID     ***
+
+IronHID::~IronHID(){
+  if (_evt_viset_handler){
+      esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_VISET, ESP_EVENT_ANY_ID, _evt_viset_handler);
+    _evt_viset_handler = nullptr;
+  }  
+
+  if (_tmr_display)
+    xTimerDelete( _tmr_display, portMAX_DELAY );
+}
 
 void IronHID::_init_screen(){
 #ifndef NO_DISPLAY
@@ -65,9 +77,18 @@ void IronHID::_init_screen(){
   u8g2.enableUTF8Print();
 #endif
 
-  // switch to default VisualSet
-  switchScreen();
+  // subscribe to ViSet events
+  esp_event_handler_instance_register_with(
+    evt::get_hndlr(),
+    IRON_VISET,
+    ESP_EVENT_ANY_ID,
+    // VisualSet switching events
+    [](void* self, esp_event_base_t base, int32_t id, void* data) { static_cast<IronHID*>(self)->switchViSet(static_cast<viset_evt_t>(id)); },
+    this,
+    &_evt_viset_handler
+  );
 
+  // setup timer that will redraw screen periodically
   if (!_tmr_display){
     _tmr_display = xTimerCreate("scrT",
                               pdMS_TO_TICKS(TIMER_DISPLAY_REFRESH),
@@ -89,193 +110,48 @@ void IronHID::_init_screen(){
 
 }
 
-void IronHID::switchScreen(vset_t v){
+void IronHID::switchViSet(viset_evt_t v){
   // todo: do I need a locking mutex here?
-  LOGI(T_HID, printf, "switch screen to:%d\n", e2int(v));
+  LOGI(T_HID, printf, "switch ViSet:%u\n", e2int(v));
   switch(v){
-    case vset_t::mainScreen :
-      viset = std::make_unique<ViSet_MainScreen>();
+    case viset_evt_t::vsMainScreen :
+      viset = std::make_unique<ViSet_MainScreen>(_btn, _encdr);
       break;
-    case vset_t::configMenu :
-      viset = std::make_unique<ViSet_ConfigurationMenu>();
+    case viset_evt_t::vsMainMenu :
+      viset = std::make_unique<ViSet_MainMenu>(_btn, _encdr);
       break;
-
+    case viset_evt_t::vsMenuTemperature :
+      viset = std::make_unique<ViSet_TemperatureSetup>(_btn, _encdr);
+      break;
   };
 }
 
-
-//  *********************
-//  ***   IronHID     ***
-
-IronHID::IronHID() : _encdr(BUTTON_DECR, BUTTON_INCR, LOW), _btn(BUTTON_ACTION, LOW) {
-  _set_button_menu_callbacks();
-}
-
-void IronHID::init(const Temperatures& t){
-  // initialize screen
-  _init_screen();
-
-  // link our event loop with ESPButton
+void IronHID::init(){
+  // link our event loop with ESPButton's loop
   ESPButton::set_event_loop_hndlr(evt::get_hndlr());
 
-  // subscribe to button events
-  if (!_btn_evt_handler){
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
-                      evt::get_hndlr(),
-                      EBTN_EVENTS, ESP_EVENT_ANY_ID,
-                      [](void* self, esp_event_base_t base, int32_t id, void* data) {
-                          // pick action button events and pass it to _menu member
-                          LOGD(T_HID, printf, "btn event:%d, gpio:%d\n", id, reinterpret_cast<EventMsg*>(data)->gpio);
-                          if (reinterpret_cast<EventMsg*>(data)->gpio == BUTTON_ACTION)
-                            static_cast<IronHID*>(self)->_menu.handleEvent(ESPButton::int2event_t(id), reinterpret_cast<EventMsg*>(data));
-                        },
-                      this, &_btn_evt_handler)
-    );
-  }
+  // create default ViSet with Main Work screen
+  switchViSet(viset_evt_t::vsMainScreen);
 
-  if (!_enc_evt_handler){
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
-                      evt::get_hndlr(),
-                      EBTN_ENC_EVENTS, ESP_EVENT_ANY_ID,
-                      [](void* self, esp_event_base_t base, int32_t id, void* data) {
-                          LOGD(T_HID, printf, "enc event:%d, cnt:%d\n", id, reinterpret_cast<EventMsg*>(data)->cntr);
-                          // pick encoder events and pass it to _menu member
-                          static_cast<IronHID*>(self)->_encoder_events(base, id, data);
-                        },
-                      this, &_enc_evt_handler)
-    );
-  }
-
-  // get initial temperatures
-  _temp = t;
+  // initialize screen
+  _init_screen();
 
   // enable middle button
   _btn.enable();
   // enable 'encoder' buttons
   _encdr.begin();
-  // set level 0 for button and encoder buttons
-  _switch_buttons_modes(0);
 }
-
-void IronHID::_set_button_menu_callbacks(){
-  // actions for middle button in main mode
-  _menu.assign(BUTTON_ACTION, 0, [this](event_t e, const EventMsg* m){ _menu_0_main_mode(e, m); });
-  _menu.assign(BUTTON_ACTION, 1, [this](event_t e, const EventMsg* m){ _menu_1_config_navigation(e, m); });
-
-}
-
-// encoder events executor, it works in cooperation with _menu object
-void IronHID::_encoder_events(esp_event_base_t base, int32_t id, void* event_data){
-  LOGD(T_HID, printf, "_encoder_events:%d, cnt:%d\n", id, reinterpret_cast<EventMsg*>(event_data)->cntr);
-  switch(_menu.getMenuLevel()){
-
-    // main Iron screen mode - encoder controls Iron working temperature
-    case 0 : {
-      _temp.working = reinterpret_cast<EventMsg*>(event_data)->cntr;
-      EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::workTemp), &_temp.working, sizeof(_temp.working));
-      break;
-    }
-
-    // configuration Menu - encoder sends commands to MuiPP sink
-    case 1 : {
-      // we do not need counter value here (for now), just figure out if it was increment or decrement via gpio which triggered and event
-      if (reinterpret_cast<EventMsg*>(event_data)->gpio == BUTTON_INCR){
-        viset->muipp_event( {mui_event_t::moveDown, 0, nullptr} );
-      } else {
-        viset->muipp_event( {mui_event_t::moveUp, 0, nullptr} );
-      }
-      break;
-    }
-  }
-}
-
-void IronHID::_switch_buttons_modes(uint32_t level){
-  switch(level){
-    // main working mode
-    case 0 :
-      _menu.setMenuLevel(0);      // switch button menu to Iron screen mode
-      _btn.deactivateAll();
-      _btn.enableEvent(event_t::click);
-      _btn.enableEvent(event_t::longPress);
-      _btn.enableEvent(event_t::multiClick);
-      // set encoder to control working temperature
-      _encdr.reset();
-      _encdr.setCounter(_temp.working, 5, TEMP_MIN, TEMP_MAX);
-      _encdr.setMultiplyFactor(2);
-      break;
-
-    // config menu navigation
-    case 1 :
-      _menu.setMenuLevel(1);      // switch button menu to mainConfig mode
-      _btn.deactivateAll();
-      _btn.enableEvent(event_t::click);
-      _btn.enableEvent(event_t::longPress);
-      // set encoder to control cursor
-      _encdr.reset();
-      //_encdr.setCounter(_temp.working, 5, TEMP_MIN, TEMP_MAX);
-      //_encdr.setMultiplyFactor(2);
-      break;
-
-  }
-}
-
-// actions for middle button when iron is main working mode
-void IronHID::_menu_0_main_mode(ESPButton::event_t e, const EventMsg* m){
-  LOGD(T_HID, printf, "Button Menu lvl:0 e:%d\n", e);
-  switch(e){
-    // Use click event to toggle iron working mode on/off
-    case event_t::click :
-      EVT_POST(IRON_SET_EVT, e2int(iron_t::workModeToggle));
-      break;
-
-    // use longPress to enter configuration menu
-    case event_t::longPress :
-      _switch_buttons_modes(1);   // switch button events to navigate in menu
-      switchScreen(vset_t::configMenu);
-      break;
-
-    // pick multiClicks
-    case event_t::multiClick :
-      // doubleclick to toggle boost mode
-      if (m->cntr == 2)
-        EVT_POST(IRON_SET_EVT, e2int(iron_t::boostModeToggle));
-      break;
-
-  }
-}
-
-// actions for middle button in main Configuration menu
-void IronHID::_menu_1_config_navigation(ESPButton::event_t e, const EventMsg* m){
-  LOGD(T_HID, printf, "Button Menu lvl:1 e:%d\n", e);
-  switch(e){
-    // Use click event to send Select to MUI menu
-    case event_t::click :{
-      auto e = viset->muipp_event( mui_event(mui_event_t::enter) );
-      // quit menu on event
-      if (e.eid == mui_event_t::quitMenu){
-        switchScreen(vset_t::mainScreen);
-        _switch_buttons_modes(0);
-      }
-      break;
-    }
-
-    // use longPress to escape current item
-    case event_t::longPress : {
-      auto e = viset->muipp_event( mui_event(mui_event_t::escape) );
-      // quit menu on event
-      if (e.eid == mui_event_t::quitMenu){
-        switchScreen(vset_t::mainScreen);
-        _switch_buttons_modes(0);
-      }
-      break;
-    }
-  }
-}
-
 
 
 // ***** VisualSet - Generic *****
-VisualSet::VisualSet() {
+VisualSet::VisualSet(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : btn(button), encdr(encoder) {
+  // subscribe to button events
+  esp_event_handler_instance_register_with(evt::get_hndlr(), EBTN_EVENTS, ESP_EVENT_ANY_ID, VisualSet::_event_picker, this, &_evt_btn_handler);
+
+  // subscribe to encoder events
+  esp_event_handler_instance_register_with(evt::get_hndlr(), EBTN_ENC_EVENTS, ESP_EVENT_ANY_ID, VisualSet::_event_picker, this, &_evt_enc_handler);
+
+/*
   // subscribe to all events on a bus
   ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
                     evt::get_hndlr(),
@@ -283,38 +159,91 @@ VisualSet::VisualSet() {
                     VisualSet::_event_picker,
                     this, &_evt_handler)
   );
+*/
 }
 
 VisualSet::~VisualSet(){
   // unsubscribe from an event bus
-  if (_evt_handler){
-    esp_event_handler_instance_unregister_with(evt::get_hndlr(), ESP_EVENT_ANY_BASE, ESP_EVENT_ANY_ID, _evt_handler);
-    _evt_handler = nullptr;
+  if (_evt_btn_handler){
+    esp_event_handler_instance_unregister_with(evt::get_hndlr(), EBTN_EVENTS, ESP_EVENT_ANY_ID, _evt_btn_handler);
+    _evt_btn_handler = nullptr;
+  }
+  if (_evt_enc_handler){
+    esp_event_handler_instance_unregister_with(evt::get_hndlr(), EBTN_ENC_EVENTS, ESP_EVENT_ANY_ID, _evt_enc_handler);
+    _evt_enc_handler = nullptr;
+  }
+
+}
+
+void VisualSet::_event_picker(void* arg, esp_event_base_t base, int32_t id, void* data){
+  //LOGV(printf, "VisualSet::_event_picker %s:%d\n", base, id);
+
+  // button events
+  if (base == EBTN_EVENTS){
+    // pick events only for "enter" gpio putton
+    if (reinterpret_cast<const EventMsg*>(data)->gpio == BUTTON_ACTION){
+      LOGV(T_HID, printf, "btn event:%d, gpio:%d\n", id, reinterpret_cast<EventMsg*>(data)->gpio);
+      static_cast<VisualSet*>(arg)->_evt_button(ESPButton::int2event_t(id), reinterpret_cast<const EventMsg*>(data));
+      //static_cast<VisualSet*>(self)->_btn_menu.handleEvent(ESPButton::int2event_t(id), reinterpret_cast<const EventMsg*>(data));
+    }
+    return;
+  }
+
+  // encoder events
+  if (base == EBTN_ENC_EVENTS){
+    LOGV(T_HID, printf, "enc event:%d, cnt:%d\n", id, reinterpret_cast<EventMsg*>(data)->cntr);
+    // pick encoder events and pass it to _menu member
+    static_cast<VisualSet*>(arg)->_evt_encoder(ESPButton::int2event_t(id), reinterpret_cast<const EventMsg*>(data));
+    return;
   }
 }
 
-void VisualSet::_event_picker(void* arg, esp_event_base_t base, int32_t id, void* event_data){
-  //LOGV(printf, "VisualSet::_event_picker %s:%d\n", base, id);
-  if (base == SENSOR_DATA)
-    return reinterpret_cast<VisualSet*>(arg)->_evt_sensor(id, event_data);
-
-  if (base == IRON_NOTIFY)
-    return reinterpret_cast<VisualSet*>(arg)->_evt_notify(id, event_data);
-
-  if (base == IRON_SET_EVT)
-    return reinterpret_cast<VisualSet*>(arg)->_evt_cmd(id, event_data);
-
-  if (base == IRON_STATE)
-    return reinterpret_cast<VisualSet*>(arg)->_evt_state(id, event_data);
-}
 
 // ***** VisualSet - Main Screen *****
-ViSet_MainScreen::ViSet_MainScreen() : VisualSet(){
+ViSet_MainScreen::ViSet_MainScreen(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : VisualSet(button, encoder) {
+  //LOGV(printf, "ViSet_MainScreen::_event_picker %s:%d\n", base, id);
+
+  // subscribe to sensor events
+  esp_event_handler_instance_register_with(evt::get_hndlr(), SENSOR_DATA, ESP_EVENT_ANY_ID,
+            [](void* self, esp_event_base_t base, int32_t id, void* data) { static_cast<ViSet_MainScreen*>(self)->_evt_sensor(id, data); },
+            this, &_evt_snsr_handler);
+  // subscribe to notify events
+  esp_event_handler_instance_register_with(evt::get_hndlr(), IRON_NOTIFY, ESP_EVENT_ANY_ID,
+            [](void* self, esp_event_base_t base, int32_t id, void* data) { static_cast<ViSet_MainScreen*>(self)->_evt_notify(id, data); },
+            this, &_evt_ntfy_handler);
+  // subscribe to notify events
+  esp_event_handler_instance_register_with(evt::get_hndlr(), IRON_SET_EVT, ESP_EVENT_ANY_ID,
+            [](void* self, esp_event_base_t base, int32_t id, void* data) { static_cast<ViSet_MainScreen*>(self)->_evt_cmd(id, data); },
+            this, &_evt_set_handler);
+  // subscribe to notify events
+  esp_event_handler_instance_register_with(evt::get_hndlr(), IRON_STATE, ESP_EVENT_ANY_ID,
+            [](void* self, esp_event_base_t base, int32_t id, void* data) { static_cast<ViSet_MainScreen*>(self)->_evt_state(id, data); },
+            this, &_evt_state_handler);
+
+
+  // configure button and encoder
+  btn.deactivateAll();
+  btn.enableEvent(event_t::click);
+  btn.enableEvent(event_t::longPress);
+  btn.enableEvent(event_t::multiClick);
+  // set encoder to control working temperature
+  encdr.reset();
+  encdr.setCounter(TEMP_DEFAULT, TEMP_STEP, TEMP_MIN, TEMP_MAX);
+  encdr.setMultiplyFactor(2);
+
   // request working temperature from IronController
   EVT_POST(IRON_GET_EVT, e2int(iron_t::workTemp));
+}
 
-  // the screen will redraw at first event from sensors
-  //_drawMainScreen();
+ViSet_MainScreen::~ViSet_MainScreen(){
+  esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_VISET, ESP_EVENT_ANY_ID, _evt_snsr_handler);
+  _evt_snsr_handler = nullptr;
+  esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_VISET, ESP_EVENT_ANY_ID, _evt_ntfy_handler);
+  _evt_ntfy_handler = nullptr;
+  esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_VISET, ESP_EVENT_ANY_ID, _evt_set_handler);
+  _evt_set_handler = nullptr;
+  esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_VISET, ESP_EVENT_ANY_ID, _evt_state_handler);
+  _evt_state_handler = nullptr;
 }
 
 void ViSet_MainScreen::drawScreen(){
@@ -436,11 +365,7 @@ void ViSet_MainScreen::_evt_sensor(int32_t id, void* data){
     case evt::iron_t::acceltemp :
       _sns_temp = *reinterpret_cast<float*>(data);
       break;
-
-    default:
-      return;
   }
-
   //_drawMainScreen();
 }
 
@@ -465,6 +390,7 @@ void ViSet_MainScreen::_evt_cmd(int32_t id, void* data){
   switch(static_cast<evt::iron_t>(id)){
     case evt::iron_t::workTemp :
       _temp.working = *reinterpret_cast<int32_t*>(data);
+      encdr.setCounter(_temp.working, TEMP_STEP, TEMP_MIN, TEMP_MAX);
     break;
   }
 }
@@ -473,45 +399,140 @@ void ViSet_MainScreen::_evt_state(int32_t id, void* data){
   switch(static_cast<evt::iron_t>(id)){
     case evt::iron_t::workTemp :
       _temp.working = *reinterpret_cast<int32_t*>(data);
+      encdr.setCounter(_temp.working, TEMP_STEP, TEMP_MIN, TEMP_MAX);
     break;
   }
 }
 
+void ViSet_MainScreen::_evt_button(ESPButton::event_t e, const EventMsg* m){
+  // actions for middle button when iron is main working mode
+  LOGD(T_HID, printf, "Button main screen e:%d, cnt: %d\n", e, m->cntr);
+  switch(e){
+    // Use click event to toggle iron working mode on/off
+    case event_t::click :
+      EVT_POST(IRON_SET_EVT, e2int(iron_t::workModeToggle));
+      break;
 
-// ***** VisualSet - ConfigurationMenu *****
+    // use longPress to enter configuration menu
+    case event_t::longPress :
+      EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMainMenu));
+      //switchScreen(vset_t::configMenu);
+      break;
 
-ViSet_ConfigurationMenu::ViSet_ConfigurationMenu(){
-  _build_menu();
+    // pick multiClicks
+    case event_t::multiClick :
+      // doubleclick to toggle boost mode
+      if (m->cntr == 2)
+        EVT_POST(IRON_SET_EVT, e2int(iron_t::boostModeToggle));
+      break;
+  }
+}
+
+void ViSet_MainScreen::_evt_encoder(ESPButton::event_t e, const EventMsg* m){
+  // main Iron screen mode - encoder controls Iron working temperature
+  _temp.working = m->cntr; // reinterpret_cast<EventMsg*>(event_data)->cntr;
+  EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::workTemp), &_temp.working, sizeof(_temp.working));
+}
+
+
+
+// ***** MuiMenu Generics *****
+
+MuiMenu::MuiMenu(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : VisualSet(button, encoder) {
+  // set buttons and encoder
+  btn.deactivateAll();
+  btn.enableEvent(event_t::click);
+  btn.enableEvent(event_t::longPress);
+  // set encoder to control cursor
+  encdr.reset();
+  //_encdr.setCounter(_temp.working, 5, TEMP_MIN, TEMP_MAX);
+  //_encdr.setMultiplyFactor(2);
 };
 
-void ViSet_ConfigurationMenu::_build_menu(){
-  LOGD(T_HID, println, "Build menu");
+// actions for middle button in main Configuration menu
+void MuiMenu::_evt_button(ESPButton::event_t e, const EventMsg* m){
+  LOGD(T_HID, printf, "_evt_button:%u, cnt:%d\n", e2int(e), m->cntr);
+  switch(e){
+    // Use click event to send 'enter/ok' to MUI menu
+    case event_t::click :{
+      auto e = muiEvent( mui_event(mui_event_t::enter) );
+      // signal switch to Main Work Screen in quitMenu event received
+      if (e.eid == mui_event_t::quitMenu){
+        EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMainScreen));
+      }
+      break;
+    }
+
+    // use longPress to escape current item
+    case event_t::longPress : {
+      auto e = muiEvent( mui_event(mui_event_t::escape) );
+      // signal switch to Main Work Screen in quitMenu event received
+      if (e.eid == mui_event_t::quitMenu){
+        EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMainScreen));
+      }
+      break;
+    }
+  }
+
+  // redraw screen
+  _rr = true;
+}
+
+// encoder events picker
+void MuiMenu::_evt_encoder(ESPButton::event_t e, const EventMsg* m){
+  LOGD(T_HID, printf, "_evt_encoder:%u, cnt:%d\n", e2int(e), m->cntr);
+  // I do not need counter value here (for now), just figure out if it was increment or decrement via gpio which triggered and event
+  if (m->gpio == BUTTON_INCR){
+    muiEvent( {mui_event_t::moveDown, 0, nullptr} );
+  } else {
+    muiEvent( {mui_event_t::moveUp, 0, nullptr} );
+  }
+
+  // redraw screen
+  _rr = true;
+}
+
+void MuiMenu::drawScreen(){
+  if (!_rr) return;
+
+  Serial.printf("st:%lu\n", millis());
+  u8g2.clearBuffer();
+  // call Mui renderer
+  render();
+  u8g2.sendBuffer();
+  Serial.printf("en:%lu\n", millis());
+
+  _rr = false;
+}
+
+
+//  **************************************
+//  ***   Main Configuration Menu      ***
+
+void ViSet_MainMenu::_buildMenu(){
+  LOGD(T_HID, println, "Build Main Menu");
 
   // create page with Settings options list
-  muiItemId page_mainmenu = makePage(dictionary[D_Settings]);
+  muiItemId root_page = makePage(dictionary[D_Settings]);
 
   // create page "Settings->Timers"
-  muiItemId page_set_time = makePage(menu_MainConfiguration.at(1), page_mainmenu);
+  muiItemId page_set_time = makePage(menu_MainConfiguration.at(1), root_page);
 
   // create page "Settings->Tip"
-  muiItemId page_set_tip = makePage(menu_MainConfiguration.at(2), page_mainmenu);
+  muiItemId page_set_tip = makePage(menu_MainConfiguration.at(2), root_page);
 
   // create page "Settings->Power"
-  muiItemId page_set_pwr = makePage(menu_MainConfiguration.at(3), page_mainmenu);
+  muiItemId page_set_pwr = makePage(menu_MainConfiguration.at(3), root_page);
 
   // create page "Settings->Info"
-  muiItemId page_set_info = makePage(menu_MainConfiguration.at(4), page_mainmenu);
-
-
-  // #define MAKE_ITEM(ITEM_TYPE, ARG, PAGE) { std::unique_ptr<MuiItem> p = std::make_unique< ITEM_TYPE > ARG; addMuippItem(std::move(p), PAGE); }
-  // MAKE_ITEM( MuiItem_U8g2_PageTitle, (u8g2, nextIndex(), MAIN_MENU_FONT1 ), page_mainmenu);    // u8g2_font_unifont_t_chinese3
+  muiItemId page_set_info = makePage(menu_MainConfiguration.at(4), root_page);
 
   // generate idx for "Page title" item
   muiItemId page_title_id = nextIndex();
   // create "Page title" item
   MuiItem_pt p = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, page_title_id, MAIN_MENU_FONT1 );
   // add item to menu and bind it to "Main Settings" page
-  addMuippItem(std::move(p), page_mainmenu);
+  addMuippItem(std::move(p), root_page);
 
   // bind  "Page title" item with "Settings->Timers" page
   addItemToPage(page_title_id, page_set_time);
@@ -526,8 +547,8 @@ void ViSet_ConfigurationMenu::_build_menu(){
  // checkboxes
   MuiItem_U8g2_CheckBox *box = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), "Some box", true, nullptr, MAINSCREEN_FONT, 0, 25);
   MuiItem_U8g2_CheckBox *box2 = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), "Some box2", false, nullptr, MAINSCREEN_FONT, 0, 40);
-  addMuippItem(box, page_set_temp);
-  addMuippItem(box2, page_set_temp);
+  addMuippItem(box, root_page);
+  addMuippItem(box2, root_page);
 */
 
 
@@ -547,108 +568,110 @@ void ViSet_ConfigurationMenu::_build_menu(){
   addItemToPage(bbuton_id, page_set_info);
 
   // create and add to main page a list with settings selection options
-  muiItemId menu_scroll_item = nextIndex();
+  muiItemId scroll_list_id = nextIndex();
 
   // Main menu dynamic scroll list
-  MuiItem_U8g2_DynamicScrollList *menu = new MuiItem_U8g2_DynamicScrollList(u8g2, menu_scroll_item,
+  MuiItem_U8g2_DynamicScrollList *menu = new MuiItem_U8g2_DynamicScrollList(u8g2, scroll_list_id,
     [](size_t index){ /* Serial.printf("idx:%u\n", index); */ return menu_MainConfiguration.at(index); },   // this lambda will feed localized strings to the MuiItem list builder class
-    [](){ return menu_MainConfiguration.size(); },
-    nullptr,                                                        // action callback
+    [](){ return menu_MainConfiguration.size(); },                  // list size callback
+    [this](size_t idx){ _submenu_selector(idx); },                  // action callback
     MAIN_MENU_Y_SHIFT, 3,                                           // offset for each line of text and total number of lines in menu
     MAIN_MENU_X_OFFSET, MAIN_MENU_Y_OFFSET,                         // x,y cursor
-    MAIN_MENU_FONT2, MAIN_MENU_FONT3
+    MAIN_MENU_FONT2, NULL
   );
 
   // set dynamic list will act as page selector
-  menu->listopts.page_selector = true;
+  //menu->listopts.page_selector = true;
   menu->listopts.back_on_last = true;
   // move menu object into MuiPP page
-  addMuippItem(menu, page_mainmenu);
-  // page_mainmenu
-  pageAutoSelect(page_mainmenu, menu_scroll_item);
-
-
-
-
-
+  addMuippItem(menu, root_page);
+  // root_page
+  pageAutoSelect(root_page, scroll_list_id);
 
   // start menu from page mainmenu
-  menuStart(page_mainmenu);
+  menuStart(root_page);
 }
 
-void ViSet_ConfigurationMenu::_build_menu_temp_opts(muiItemId parent, muiItemId header, muiItemId footer){
-  // create page "Settings->Temperature"
-  muiItemId page_set_temp = makePage(menu_MainConfiguration.at(0), parent);
+void ViSet_MainMenu::_submenu_selector(size_t index){
+  LOGD(T_HID, printf, "_submenu_selector:%u\n", index);
+  switch (index){
+    case 0 :  // temp settings
+      EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMenuTemperature));
+      break;
+  }
+}
 
-  // bind  "Page title" item with "Settings->Temperature" page
-  addItemToPage(header, page_set_temp);
+
+//  **************************************
+//  ***   Temperature Control Menu     ***
+
+void ViSet_TemperatureSetup::_buildMenu(){
+  // create page "Settings->Temperature"
+  muiItemId root_page = makePage(menu_MainConfiguration.at(0));
+
+  // generate idx for "Page title" item
+  muiItemId page_title_id = nextIndex();
+  // create "Page title" item
+  MuiItem_pt p = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, page_title_id, MAIN_MENU_FONT1 );
+  // add item to menu and bind it to "Main Settings" page
+  addMuippItem(std::move(p), root_page);
 
   // create and add to main page a list with settings selection options
-  muiItemId menu_scroll_item = nextIndex();
+  muiItemId scroll_list_id = nextIndex();
 
-  // Main menu dynamic scroll list
-  MuiItem_U8g2_DynamicScrollList *menu = new MuiItem_U8g2_DynamicScrollList(u8g2, menu_scroll_item,
+  // Temperature menu dynamic scroll list
+  MuiItem_U8g2_DynamicScrollList *list = new MuiItem_U8g2_DynamicScrollList(u8g2, scroll_list_id,
     [](size_t index){ /* Serial.printf("idx:%u\n", index); */ return menu_TemperatureOpts.at(index); },   // this lambda will feed localized strings to the MuiItem list builder class
     [](){ return menu_TemperatureOpts.size(); },
     nullptr,                                                        // action callback
     MAIN_MENU_Y_SHIFT, 3,                                           // offset for each line of text and total number of lines in menu
     MAIN_MENU_X_OFFSET, MAIN_MENU_Y_OFFSET,                         // x,y cursor
-    MAIN_MENU_FONT2, MAIN_MENU_FONT3
+    MAIN_MENU_FONT3, MAIN_MENU_FONT3
   );
 
-  // set dynamic list will act as page selector
-  menu->listopts.page_selector = true;
-  menu->listopts.back_on_last = true;
+  // dynamic list will act as page selector
+  list->listopts.page_selector = true;
+  list->listopts.back_on_last = true;
   // move menu object into MuiPP page
-  addMuippItem(menu, page_set_temp);
-  // page_mainmenu
-  pageAutoSelect(page_set_temp, menu_scroll_item);
+  addMuippItem(list, root_page);
+  // root_page
+  pageAutoSelect(root_page, scroll_list_id);
 
-  // create page "Temperature->Timers"
-  muiItemId page_T_Temp_SaveLastWrk = makePage(menu_TemperatureOpts.at(1), page_set_temp);
+  // page "save work temp"
+  muiItemId page_savewrkT = makePage(menu_TemperatureOpts.at(0), root_page);
 
-  MuiItem_U8g2_CheckBox *box = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), "Some box", true, nullptr, MAINSCREEN_FONT, 0, 25);
-  addMuippItem(box, page_set_temp);
+  // page title element
+  addItemToPage(page_title_id, page_savewrkT);
+
+  // checkbox
+  MuiItem_U8g2_CheckBox *box = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), "Some box with very long text here...", true, nullptr, MAINSCREEN_FONT, 0, 25);
+  addMuippItem(box, page_savewrkT);
+
+  // generate idx for "Back Button" item
+  muiItemId bbuton_id = nextIndex();
+  // create "Back Button" item
+  MuiItem_pt bb = std::make_shared< MuiItem_U8g2_BackButton > (u8g2, bbuton_id, dictionary[D_return], MAIN_MENU_FONT1, PAGE_BACK_BTN_X_OFFSET, PAGE_BACK_BTN_Y_OFFSET);
+
+  // add item and bind it to "save work temp" page
+  addMuippItem(std::move(bb), page_savewrkT);
+
 
   // back button
-  addItemToPage(footer, page_set_temp);
+  //addItemToPage(footer, root_page);
 
   // add item to menu and bind it to "Settings->Temperature" page
-  //addMuippItem(std::move(bb), page_set_temp);
+  //addMuippItem(std::move(bb), root_page);
 
-
-
+  // start menu from root page
+  menuStart(root_page);
 }
 
 
-
-void ViSet_ConfigurationMenu::drawScreen(){
-  if (!refresh_req) return;
-
-  Serial.printf("st:%lu\n", millis());
-  u8g2.clearBuffer();
-  render();
-  u8g2.sendBuffer();
-  Serial.printf("en:%lu\n", millis());
-
-  refresh_req = false;
-}
-
-mui_event ViSet_ConfigurationMenu::muipp_event(mui_event e) {
-  //LOGD(T_HID, printf, "Got event for muipp lvl:1 e:%u\n", e.eid);
-
-  // forward those messages to muipp
-  auto reply = muiEvent(e);
-  // any event will trigger screen refresh
-  refresh_req = true;
-  return reply;
-}
 
 
 // *****************************
 // *** MUI entities
 
-void _cb_save_wrk_temp(size_t index);
 
 
 

@@ -15,6 +15,19 @@
 #include "espasyncbutton.hpp"
 #include "muipp_u8g2.h"
 
+
+/**
+ * @brief controls feedback events returned from VisualSet instance to IronHID class 
+ * 
+ */
+enum class viset_evt_t {
+  noop,                 // no operation
+  vsMainScreen,         // switch to Main work screen
+  vsMainMenu,           // switch to Main Menu
+  vsMenuTemperature,    // switch to Temperature setup menu
+  quitCfgMenu           // MuiPP menu exist
+};
+
 /**
  * @brief A generic screen object instance
  * abstract class that represents some screen information,
@@ -23,31 +36,39 @@
  */
 class VisualSet {
 
-  esp_event_handler_instance_t _evt_handler = nullptr;
+  // action button event handler
+  esp_event_handler_instance_t _evt_btn_handler = nullptr;
+
+  // encoder event handler
+  esp_event_handler_instance_t _evt_enc_handler = nullptr;
 
   // event dispatcher
   static void _event_picker(void* arg, esp_event_base_t base, int32_t id, void* event_data);
 
 protected:
-  // flag that shows a screen must be refreshed
-  bool refresh_req{true};
 
-  // sensor events picker
-  virtual void _evt_sensor(int32_t id, void* event_data){};
-  // notifications
-  virtual void _evt_notify(int32_t id, void* event_data){};
-  // commands
-  virtual void _evt_cmd(int32_t id, void* data){};
-  // commands
-  virtual void _evt_state(int32_t id, void* data){};
+  /**
+   * @brief reference to pseudo-encoder object
+   * ViSet can adjust it's properties to fit proper control
+   * 
+   */
+  PseudoRotaryEncoder &encdr;
 
+  /**
+   * @brief reference to button object
+   * ViSet can adjust it's properties to fit proper control
+   * 
+   */
+  GPIOButton<ESPEventPolicy> &btn;
+
+  // button events picker
+  virtual void _evt_button(ESPButton::event_t e, const EventMsg* m){};
+  // encoder events picker
+  virtual void _evt_encoder(ESPButton::event_t e, const EventMsg* m){};
 
 public:
-  VisualSet();
+  VisualSet(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder);
   virtual ~VisualSet();
-
-  // MuiPlusPlus event sink, might be used in derrived classes
-  virtual mui_event muipp_event(mui_event e){ return {}; };
 
   // draw on screen information
   virtual void drawScreen() = 0;
@@ -59,47 +80,21 @@ public:
  * 
  */
 class IronHID {
-  // a set of availbale "screens"
-  enum class vset_t {
-    mainScreen = 0,
-    configMenu
-  };
 
   // Display object - an instance of visual set that represents displayed info on a screen 
   std::unique_ptr<VisualSet> viset;
+
   // screen redraw timer
   TimerHandle_t _tmr_display = nullptr;
-  // flag that shows a screen must be refreshed
-  //bool refresh_req{true};
 
-  // Two button pseudo-encoder
-  PseudoRotaryEncoder _encdr;
+  // event handler
+  esp_event_handler_instance_t _evt_viset_handler = nullptr;
 
   // action button
   GPIOButton<ESPEventPolicy> _btn;
 
-  // action button menu
-  ButtonCallbackMenu _menu;
-
-  // action button event handler
-  esp_event_handler_instance_t _btn_evt_handler = nullptr;
-
-  // encoder event handler
-  esp_event_handler_instance_t _enc_evt_handler = nullptr;
-
-  // target temperature
-  Temperatures _temp;
-
-  bool _save_wrk_temp;
-
-  // encoder events executor, it works in cooperation with _menu object
-  void _encoder_events(esp_event_base_t base, int32_t id, void* event_data);
-
-  // init action button menu
-  void _set_button_menu_callbacks();
-
-  // switch between different menu modes for action button
-  void _switch_buttons_modes(uint32_t level);
+  // Two button pseudo-encoder
+  PseudoRotaryEncoder _encdr;
 
   /**
    * @brief initialize screen
@@ -109,38 +104,33 @@ class IronHID {
   void _init_screen();
 
   /**
-   * @brief button actions when iron is main working mode
+   * @brief button action handlers when iron is in menu configuration
    * 
    */
-  void _menu_0_main_mode(ESPButton::event_t e, const EventMsg* m);
-
-  void _menu_1_config_navigation(ESPButton::event_t e, const EventMsg* m);
+  //void _button_config_menu(ESPButton::event_t e, const EventMsg* m);
 
 public:
   // c-tor
-  IronHID();
-
+  IronHID() : _encdr(BUTTON_DECR, BUTTON_INCR, LOW), _btn(BUTTON_ACTION, LOW) {};
+  // d-tor
+  ~IronHID();
 
   /**
    * @brief initialize HID,
    * attach to button events, init display class, etc...
    * 
    */
-  void init(const Temperatures& t);
+  void init();
 
   /**
    * @brief switch to another instance of VisualSet's object
    * this method will spawn a new instance of screen renderer depending on requested paramenter
    * 
    */
-  void switchScreen(vset_t v = vset_t::mainScreen);
-
+  void switchViSet(viset_evt_t v);
 
 
 private:
-
-  // MuiPP callback that sets save/not save work temperature flag
-  void _cb_save_wrk_temp(size_t index);
 
 };
 
@@ -158,44 +148,107 @@ class ViSet_MainScreen : public VisualSet {
   // input voltage
   uint32_t _vin{0};
 
+  esp_event_handler_instance_t _evt_snsr_handler = nullptr;
+  esp_event_handler_instance_t _evt_ntfy_handler = nullptr;
+  esp_event_handler_instance_t _evt_set_handler = nullptr;
+  esp_event_handler_instance_t _evt_state_handler = nullptr;
+
+  // event dispatcher
+  static void _event_picker(void* arg, esp_event_base_t base, int32_t id, void* event_data);
+
+  // button events picker
+  void _evt_button(ESPButton::event_t e, const EventMsg* m) override;
+  // encoder events picker
+  void _evt_encoder(ESPButton::event_t e, const EventMsg* m) override;
+
+  // sensor events handler
+  void _evt_sensor(int32_t id, void* data);
+
+  // notify events handler
+  void _evt_notify(int32_t id, void* data);
+
+  // command events handler
+  void _evt_cmd(int32_t id, void* data);
+
+  // state events handler
+  void _evt_state(int32_t id, void* data);
+
+public:
+  ViSet_MainScreen(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder);
+
+  ~ViSet_MainScreen();
+
   // renders Main working screen
   void drawScreen() override;
 
-  // sensor events handler
-  void _evt_sensor(int32_t id, void* data) override;
+};
 
-  // notify events handler
-  void _evt_notify(int32_t id, void* data) override;
 
-  // command events handler
-  void _evt_cmd(int32_t id, void* data) override;
+/**
+ * @brief generic class for menu objects
+ * it will handle button and encoder events, screen refresh, etc...
+ * menu functions must be implemented in derived classes
+ * 
+ */
+class MuiMenu : public VisualSet, public MuiPlusPlus {
 
-  // state events handler
-  void _evt_state(int32_t id, void* data) override;
+protected:
+  // screen refresh required
+  bool _rr{true};
+
+  // button events picker
+  void _evt_button(ESPButton::event_t e, const EventMsg* m) override;
+  // encoder events picker
+  void _evt_encoder(ESPButton::event_t e, const EventMsg* m) override;
 
 public:
-  ViSet_MainScreen();
+  // c-tor
+  MuiMenu(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder);
+
+  /**
+   * @brief handle that is called by screent refresh timer to redraw screen
+   * 
+   */
+  void drawScreen() override;
+};
+
+
+/**
+ * @brief this class will draw and navigate through a
+ * different sections of configuration menu
+ * 
+ */
+class ViSet_MainMenu : public MuiMenu {
+
+  // menu builder function
+  void _buildMenu();
+
+  /**
+   * @brief a callback method that hooked to MuiItem_U8g2_DynamicScrollList
+   * it will pick index of a list item that represents desired submenu section
+   * and send event to HID class to switch ViSet instance to another menu object
+   * 
+   */
+  void _submenu_selector(size_t index);
+
+public:
+  // c-tor
+  ViSet_MainMenu(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : MuiMenu(button, encoder) { _buildMenu(); }
 
 };
 
+
 /**
- * @brief this class will draw and navigate through configuration menu
+ * @brief temperature control menu
  * 
  */
-class ViSet_ConfigurationMenu : public VisualSet, public MuiPlusPlus {
-
-  void _build_menu();
-
-  void _build_menu_temp_opts(muiItemId parent, muiItemId header, muiItemId footer);
-
+class ViSet_TemperatureSetup : public MuiMenu {
+  // menu builder function
+  void _buildMenu();
 
 public:
-  ViSet_ConfigurationMenu();
-
-  // MuiPlusPlus event sink, might be used in derrived classes
-  mui_event muipp_event(mui_event e) override;
-
-  void drawScreen() override;
+  // c-tor
+  ViSet_TemperatureSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : MuiMenu(button, encoder) { _buildMenu(); }
 
 };
 
