@@ -90,6 +90,7 @@ class IronHID {
   // target temperature
   Temperatures _temp;
 
+  bool _save_wrk_temp;
 
   // encoder events executor, it works in cooperation with _menu object
   void _encoder_events(esp_event_base_t base, int32_t id, void* event_data);
@@ -134,9 +135,14 @@ public:
    */
   void switchScreen(vset_t v = vset_t::mainScreen);
 
+
+
+private:
+
+  // MuiPP callback that sets save/not save work temperature flag
+  void _cb_save_wrk_temp(size_t index);
+
 };
-
-
 
 /**
  * @brief Main Iron screen display
@@ -179,6 +185,9 @@ public:
 class ViSet_ConfigurationMenu : public VisualSet, public MuiPlusPlus {
 
   void _build_menu();
+
+  void _build_menu_temp_opts(muiItemId parent, muiItemId header, muiItemId footer);
+
 
 public:
   ViSet_ConfigurationMenu();

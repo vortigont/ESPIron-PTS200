@@ -13,6 +13,7 @@
 #include <array>
 #include "i18n.h"
 
+#define MAINSCREEN_FONT     u8g2_font_unifont_t_cyrillic
 // 12x16 wrong? small gothic font
 #define MAIN_MENU_FONT1     u8g2_font_glasstown_nbp_t_all
 // 10x14 OK!
@@ -29,7 +30,7 @@
 #define MAIN_MENU_Y_OFFSET  12
 #define MAIN_MENU_Y_SHIFT   15
 
-#define PAGE_BACK_BTN_X_OFFSET  95
+#define PAGE_BACK_BTN_X_OFFSET  100
 #define PAGE_BACK_BTN_Y_OFFSET  50
 
 // EN-US
@@ -45,6 +46,9 @@ static constexpr const char* T_setT = "Set:";               // Target temperatur
 static constexpr const char* T_standby = "Standby";         // state display in 'Standby'
 static constexpr const char* T_return = "<Back";            // return back in menu's
 
+// Temp settings descr
+static constexpr const char* T_Temp_SaveLastWrkDescr = "Save last work Temperature";
+
 // Menu Page names
 static constexpr const char* T_Settings = "Settings";
 
@@ -55,6 +59,13 @@ static constexpr const char* T_TipSettings = "Tip";
 static constexpr const char* T_PowerSupply = "Power Supply";
 static constexpr const char* T_Information = "Information";
 static constexpr const char* T_Language = "Language";
+
+// Temperature settings menu
+static constexpr const char* T_Temp_SaveLastWrk = "Save work T";
+static constexpr const char* T_TempDefltWrk = "Default work T";
+static constexpr const char* T_TempSleep = "Standby temp";
+static constexpr const char* T_TempBoost = "Boost increase T";
+
 
 } // end  of namespace lang_en_us
 
@@ -72,7 +83,8 @@ static constexpr std::array<const char *, D_____SIZE> dictionary = {
     lang_en_us::T_return,
     lang_en_us::T_Settings,
     lang_en_us::T_setT,
-    lang_en_us::T_standby
+    lang_en_us::T_standby,
+    lang_en_us::T_Temp_SaveLastWrkDescr
 };
 
 // Main Configuration menu items
@@ -83,4 +95,12 @@ static constexpr std::array<const char *, MENU_MAIN_CFG_SIZE> menu_MainConfigura
     lang_en_us::T_PowerSupply,
     lang_en_us::T_Information,
     lang_en_us::T_return
+};
+
+// Main Configuration menu items
+static constexpr std::array<const char *, MENU_TEMPERATURE_CFG_SIZE> menu_TemperatureOpts = {
+    lang_en_us::T_Temp_SaveLastWrk,
+    lang_en_us::T_TempDefltWrk,
+    lang_en_us::T_TempSleep,
+    lang_en_us::T_TempBoost
 };

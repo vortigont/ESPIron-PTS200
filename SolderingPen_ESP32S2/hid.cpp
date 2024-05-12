@@ -193,6 +193,7 @@ void IronHID::_switch_buttons_modes(uint32_t level){
   switch(level){
     // main working mode
     case 0 :
+      _menu.setMenuLevel(0);      // switch button menu to Iron screen mode
       _btn.deactivateAll();
       _btn.enableEvent(event_t::click);
       _btn.enableEvent(event_t::longPress);
@@ -205,9 +206,11 @@ void IronHID::_switch_buttons_modes(uint32_t level){
 
     // config menu navigation
     case 1 :
+      _menu.setMenuLevel(1);      // switch button menu to mainConfig mode
       _btn.deactivateAll();
       _btn.enableEvent(event_t::click);
-      // set encoder to control working temperature
+      _btn.enableEvent(event_t::longPress);
+      // set encoder to control cursor
       _encdr.reset();
       //_encdr.setCounter(_temp.working, 5, TEMP_MIN, TEMP_MAX);
       //_encdr.setMultiplyFactor(2);
@@ -227,7 +230,6 @@ void IronHID::_menu_0_main_mode(ESPButton::event_t e, const EventMsg* m){
 
     // use longPress to enter configuration menu
     case event_t::longPress :
-      _menu.setMenuLevel(1);      // switch button menu to mainConfig mode
       _switch_buttons_modes(1);   // switch button events to navigate in menu
       switchScreen(vset_t::configMenu);
       break;
@@ -247,20 +249,32 @@ void IronHID::_menu_1_config_navigation(ESPButton::event_t e, const EventMsg* m)
   LOGD(T_HID, printf, "Button Menu lvl:1 e:%d\n", e);
   switch(e){
     // Use click event to send Select to MUI menu
-    case event_t::click :
-      viset->muipp_event( mui_event(mui_event_t::enter) );
+    case event_t::click :{
+      auto e = viset->muipp_event( mui_event(mui_event_t::enter) );
+      // quit menu on event
+      if (e.eid == mui_event_t::quitMenu){
+        switchScreen(vset_t::mainScreen);
+        _switch_buttons_modes(0);
+      }
       break;
+    }
 
     // use longPress to escape current item
-    case event_t::longPress :
-      viset->muipp_event( mui_event(mui_event_t::escape) );
+    case event_t::longPress : {
+      auto e = viset->muipp_event( mui_event(mui_event_t::escape) );
+      // quit menu on event
+      if (e.eid == mui_event_t::quitMenu){
+        switchScreen(vset_t::mainScreen);
+        _switch_buttons_modes(0);
+      }
       break;
+    }
   }
 }
 
 
 
-// ***** VisualSet - Main Screen *****
+// ***** VisualSet - Generic *****
 VisualSet::VisualSet() {
   // subscribe to all events on a bus
   ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
@@ -294,6 +308,7 @@ void VisualSet::_event_picker(void* arg, esp_event_base_t base, int32_t id, void
     return reinterpret_cast<VisualSet*>(arg)->_evt_state(id, event_data);
 }
 
+// ***** VisualSet - Main Screen *****
 ViSet_MainScreen::ViSet_MainScreen() : VisualSet(){
   // request working temperature from IronController
   EVT_POST(IRON_GET_EVT, e2int(iron_t::workTemp));
@@ -305,7 +320,7 @@ ViSet_MainScreen::ViSet_MainScreen() : VisualSet(){
 void ViSet_MainScreen::drawScreen(){
   u8g2.clearBuffer();
 
-  u8g2.setFont(u8g2_font_unifont_t_chinese3);
+  u8g2.setFont(MAINSCREEN_FONT);
     //u8g2.setFont(PTS200_16);
 
   u8g2.setFontPosTop();
@@ -475,9 +490,6 @@ void ViSet_ConfigurationMenu::_build_menu(){
   // create page with Settings options list
   muiItemId page_mainmenu = makePage(dictionary[D_Settings]);
 
-  // create page "Settings->Temperature"
-  muiItemId page_set_temp = makePage(menu_MainConfiguration.at(0), page_mainmenu);
-
   // create page "Settings->Timers"
   muiItemId page_set_time = makePage(menu_MainConfiguration.at(1), page_mainmenu);
 
@@ -501,8 +513,6 @@ void ViSet_ConfigurationMenu::_build_menu(){
   // add item to menu and bind it to "Main Settings" page
   addMuippItem(std::move(p), page_mainmenu);
 
-  // bind  "Page title" item with "Settings->Temperature" page
-  addItemToPage(page_title_id, page_set_temp);
   // bind  "Page title" item with "Settings->Timers" page
   addItemToPage(page_title_id, page_set_time);
   // bind  "Page title" item with "Settings->Tip" page
@@ -512,16 +522,23 @@ void ViSet_ConfigurationMenu::_build_menu(){
   // bind  "Page title" item with "Settings->Info" page
   addItemToPage(page_title_id, page_set_info);
 
+/*
+ // checkboxes
+  MuiItem_U8g2_CheckBox *box = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), "Some box", true, nullptr, MAINSCREEN_FONT, 0, 25);
+  MuiItem_U8g2_CheckBox *box2 = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), "Some box2", false, nullptr, MAINSCREEN_FONT, 0, 40);
+  addMuippItem(box, page_set_temp);
+  addMuippItem(box2, page_set_temp);
+*/
+
+
   // generate idx for "Back Button" item
   muiItemId bbuton_id = nextIndex();
   // create "Back Button" item
   MuiItem_pt bb = std::make_shared< MuiItem_U8g2_BackButton > (u8g2, bbuton_id, dictionary[D_return], MAIN_MENU_FONT1, PAGE_BACK_BTN_X_OFFSET, PAGE_BACK_BTN_Y_OFFSET);
 
-  // add item to menu and bind it to "Settings->Temperature" page
-  addMuippItem(std::move(bb), page_set_temp);
+  // add item to menu and bind it to "Settings->Timers" page
+  addMuippItem(std::move(bb), page_set_time);
 
-  // bind  "Back Button" item with "Settings->Timers" page
-  addItemToPage(bbuton_id, page_set_time);
   // bind  "Back Button" item with "Settings->Tip" page
   addItemToPage(bbuton_id, page_set_tip);
   // bind  "Back Button" item with "Settings->Power" page
@@ -529,28 +546,10 @@ void ViSet_ConfigurationMenu::_build_menu(){
   // bind  "Back Button" item with "Settings->Info" page
   addItemToPage(bbuton_id, page_set_info);
 
-  //std::unique_ptr<MuiItem> p = std::make_unique<MuiItem_U8g2_PageTitle>(u8g2, muipp.nextIndex(), u8g2_font_unifont_t_chinese3);
-  //muipp.addMuippItem(std::move(p), cfg_page);
-
-  //MAKE_ITEM( MuiItem_U8g2_PageTitle, (u8g2, muipp.nextIndex(), MAIN_MENU_FONT2, 10, 15), cfg_page);
-  //std::unique_ptr<MuiItem> p = std::make_unique<MuiItem_U8g2_PageTitle>(u8g2, muipp.nextIndex(), nullptr, 15, 15);
-  //muipp.addMuippItem(std::move(p), cfg_page);
-
-
-  //MAKE_ITEM( MuiItem_U8g2_PageTitle, (u8g2, muipp.nextIndex(), MAIN_MENU_FONT3, 10, 30), cfg_page);
-  //std::unique_ptr<MuiItem> p = std::make_unique<MuiItem_U8g2_PageTitle>(u8g2, muipp.nextIndex(), nullptr, 30, 50);
-  //muipp.addMuippItem(std::move(p), cfg_page);
-
   // create and add to main page a list with settings selection options
   muiItemId menu_scroll_item = nextIndex();
-/*
-  std::unique_ptr<MuiItem> p = std::make_unique<MuiItem_U8g2_DynamicScrollList>(u8g2, menu_scroll_item,
-    [](size_t index){ Serial.printf("idx:%u\n", index); return menu_MainConfiguration.at(index); },   // this lambda will feed localized strings to the MuiItem list builder class
-    menu_MainConfiguration.size(),
-    MAIN_MENU_Y_SHIFT, 3,                                           // offset for each line of text and total number of lines in menu
-    MAIN_MENU_FONT2, MAIN_MENU_FONT3, MAIN_MENU_X_OFFSET, MAIN_MENU_Y_OFFSET
-  );
-*/
+
+  // Main menu dynamic scroll list
   MuiItem_U8g2_DynamicScrollList *menu = new MuiItem_U8g2_DynamicScrollList(u8g2, menu_scroll_item,
     [](size_t index){ /* Serial.printf("idx:%u\n", index); */ return menu_MainConfiguration.at(index); },   // this lambda will feed localized strings to the MuiItem list builder class
     [](){ return menu_MainConfiguration.size(); },
@@ -562,13 +561,65 @@ void ViSet_ConfigurationMenu::_build_menu(){
 
   // set dynamic list will act as page selector
   menu->listopts.page_selector = true;
+  menu->listopts.back_on_last = true;
   // move menu object into MuiPP page
   addMuippItem(menu, page_mainmenu);
   // page_mainmenu
   pageAutoSelect(page_mainmenu, menu_scroll_item);
 
-  menuStart(page_mainmenu, menu_scroll_item);
+
+
+
+
+
+  // start menu from page mainmenu
+  menuStart(page_mainmenu);
 }
+
+void ViSet_ConfigurationMenu::_build_menu_temp_opts(muiItemId parent, muiItemId header, muiItemId footer){
+  // create page "Settings->Temperature"
+  muiItemId page_set_temp = makePage(menu_MainConfiguration.at(0), parent);
+
+  // bind  "Page title" item with "Settings->Temperature" page
+  addItemToPage(header, page_set_temp);
+
+  // create and add to main page a list with settings selection options
+  muiItemId menu_scroll_item = nextIndex();
+
+  // Main menu dynamic scroll list
+  MuiItem_U8g2_DynamicScrollList *menu = new MuiItem_U8g2_DynamicScrollList(u8g2, menu_scroll_item,
+    [](size_t index){ /* Serial.printf("idx:%u\n", index); */ return menu_TemperatureOpts.at(index); },   // this lambda will feed localized strings to the MuiItem list builder class
+    [](){ return menu_TemperatureOpts.size(); },
+    nullptr,                                                        // action callback
+    MAIN_MENU_Y_SHIFT, 3,                                           // offset for each line of text and total number of lines in menu
+    MAIN_MENU_X_OFFSET, MAIN_MENU_Y_OFFSET,                         // x,y cursor
+    MAIN_MENU_FONT2, MAIN_MENU_FONT3
+  );
+
+  // set dynamic list will act as page selector
+  menu->listopts.page_selector = true;
+  menu->listopts.back_on_last = true;
+  // move menu object into MuiPP page
+  addMuippItem(menu, page_set_temp);
+  // page_mainmenu
+  pageAutoSelect(page_set_temp, menu_scroll_item);
+
+  // create page "Temperature->Timers"
+  muiItemId page_T_Temp_SaveLastWrk = makePage(menu_TemperatureOpts.at(1), page_set_temp);
+
+  MuiItem_U8g2_CheckBox *box = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), "Some box", true, nullptr, MAINSCREEN_FONT, 0, 25);
+  addMuippItem(box, page_set_temp);
+
+  // back button
+  addItemToPage(footer, page_set_temp);
+
+  // add item to menu and bind it to "Settings->Temperature" page
+  //addMuippItem(std::move(bb), page_set_temp);
+
+
+
+}
+
 
 
 void ViSet_ConfigurationMenu::drawScreen(){
@@ -597,6 +648,7 @@ mui_event ViSet_ConfigurationMenu::muipp_event(mui_event e) {
 // *****************************
 // *** MUI entities
 
+void _cb_save_wrk_temp(size_t index);
 
 
 

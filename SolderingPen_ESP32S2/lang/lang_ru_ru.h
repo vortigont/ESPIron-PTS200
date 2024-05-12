@@ -13,6 +13,7 @@
 #include <array>
 #include "i18n.h"
 
+#define MAINSCREEN_FONT     u8g2_font_unifont_t_cyrillic
 
 // 10x16 contains lat/cyr chars
 #define MAIN_MENU_FONT3     u8g2_font_mercutio_sc_nbp_t_all

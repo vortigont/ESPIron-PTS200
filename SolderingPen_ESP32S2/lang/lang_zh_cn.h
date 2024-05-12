@@ -14,6 +14,9 @@
 #include "i18n.h"
 #include "lang_en_us.h"
 
+#define MAINSCREEN_FONT     u8g2_font_unifont_t_chinese3
+
+
 // ZH-CN
 namespace lang_zh_cn {
 // ZH-CN

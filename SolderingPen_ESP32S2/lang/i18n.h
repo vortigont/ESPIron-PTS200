@@ -14,7 +14,7 @@
 
 
 #define MENU_MAIN_CFG_SIZE          6
-
+#define MENU_TEMPERATURE_CFG_SIZE   4
 /*
 // List of available translations
 enum lang_index : uint32_t {
@@ -40,5 +40,6 @@ enum dict_index {
     D_Settings,
     D_set_t,
     D_standby,
+    D_Temp_SaveLastWrkDescr,
     D_____SIZE
 };
