@@ -15,15 +15,17 @@ Discussion forum [thread](https://community.alexgyver.ru/threads/proshivka-dlja-
 WIP:
  - turn Arduino's ino file into a set of cpp and header files
  - create separate class instances for heater, sensors, etc...
- - sepparate activities into independent tasks and RTOS threads
+ - decomposite project into independent tasks and RTOS threads
  - use full-range PWM for heater
  - enabled PID control for PWM (not optimized yet)
  - revised temperture probes scheduling
  - exclude useless tight loops
  - add tunable debugging messages
  - removed ALL blocking code, wiped arduino's `loop()` hooks, now all code is asynchronous
+ - rework UI into non-blocking event based configuration system
 
-Iron [Schematics](/docs/PTS200_Schematic_2022-07-10.pdf)
+
+Iron [Schematics](/docs/PTS200_Schematic_2022-07-10.pdf) (probably from similar iron, some items does not match with PTS-200)
 
 ### Key controls
 | Mode | Key | Action | Function |
