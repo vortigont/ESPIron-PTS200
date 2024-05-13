@@ -27,17 +27,17 @@
 #define ADDR_EEPROM_SIZE ADDR_HAND_SIDE + 1
 
 
-extern uint16_t DefaultTemp;
-extern uint16_t SleepTemp;
-extern uint8_t BoostTemp;
-extern uint16_t time2sleep;
-extern uint8_t time2off;
-extern uint8_t timeOfBoost;
+//extern uint16_t DefaultTemp;
+//extern uint16_t SleepTemp;
+//extern uint8_t BoostTemp;
+//extern uint16_t time2sleep;
+//extern uint8_t time2off;
+//extern uint8_t timeOfBoost;
 extern uint8_t MainScrType;
 extern bool beepEnable;
-extern volatile uint8_t VoltageValue;
+//extern volatile uint8_t VoltageValue;
 extern bool QCEnable;
-extern uint8_t WAKEUPthreshold;
+//extern uint8_t WAKEUPthreshold;
 extern uint8_t CurrentTip;
 extern uint8_t NumberOfTips;
 

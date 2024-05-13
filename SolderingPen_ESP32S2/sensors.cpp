@@ -1,4 +1,5 @@
 #include "sensors.hpp"
+#include "nvs_handle.hpp"
 #include "const.h"
 #include "log.h"
 
@@ -7,22 +8,26 @@
 #define ACCEL_MOTION_POLL_PERIOD        50      // ms
 #define ACCEL_TEMPERATURE_POLL_PERIOD   1000    // ms
 
+#define VIN_ADC_POLL_PERIOD             1000    // ms
 
 GyroSensor::~GyroSensor(){
+  // unsubscribe from event bus
+  if (_evt_set_handler){
+    esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_SET_EVT, e2int(evt::iron_t::sensorsReload), _evt_set_handler);
+    _evt_set_handler = nullptr;
+  }
+
   xTimerDelete( _tmr_temp, portMAX_DELAY );
   xTimerDelete( _tmr_accel, portMAX_DELAY );
   _tmr_temp = nullptr;
   _tmr_accel = nullptr;
 };
 
-void GyroSensor::begin(){
+void GyroSensor::init(){
   if (!accel.begin()) {
     LOGE(T_GYRO, println, "Accelerometer not detected.");
+    return;
   }
-
-//  _tPoller.set(ACCEL_MOTION_POLL_PERIOD, TASK_FOREVER, [this](){ _poll(); });
-//  ts.addTask(_tPoller);
-//  _tPoller.enable();
 
   // start temperature polling
   if (!_tmr_temp){
@@ -44,10 +49,22 @@ void GyroSensor::begin(){
                               static_cast<void*>(this),
                               [](TimerHandle_t h) { static_cast<GyroSensor*>(pvTimerGetTimerID(h))->_accel_poll(); }
                             );
-    // keep it disabled on begin
-    //xTimerStart( _tmr_accel, pdMS_TO_TICKS(10) );
+    // keep it disabled on begin, TODO: realct on events from mode changes
+    xTimerStart( _tmr_accel, pdMS_TO_TICKS(10) );
   }
 
+  // subscribe to event bus
+  if (!_evt_set_handler){
+    esp_event_handler_instance_register_with(
+      evt::get_hndlr(),
+      IRON_SET_EVT,
+      e2int(evt::iron_t::sensorsReload),    // subscribe to 'sensorsReload command'
+      [](void* self, esp_event_base_t base, int32_t id, void* data) { static_cast<GyroSensor*>(self)->enable(); },    // trigger config and timers reload
+      this,
+      &_evt_set_handler
+    );
+  }
+  
   // lis2dh12_block_data_update_set(&(accel.dev_ctx), PROPERTY_DISABLE);
   // accel.setScale(LIS2DH12_2g);
   // accel.setMode(LIS2DH12_HR_12bit);
@@ -140,13 +157,13 @@ void GyroSensor::_accel_poll(){
   // Serial.print(" ");
   // Serial.println(var[2]);
 
-  int varThreshold = _motionThreshold * ACCEL_MOTION_FACTOR;
+  uint32_t varThreshold = _motionThreshold * ACCEL_MOTION_FACTOR;
 
   if (var[0] > varThreshold || var[1] > varThreshold || var[2] > varThreshold) {
     _motion = true;
     _clear();
     LOGD(T_GYRO, println, "motion detected!");
-    LOGD(T_GYRO, printf, "Th:%d, x:%u, y:%u, z:%u\n", varThreshold, var[0], var[1], var[2]);
+    LOGV(T_GYRO, printf, "Th:%d, x:%u, y:%u, z:%u\n", varThreshold, var[0], var[1], var[2]);
     // post event with motion detect
     EVT_POST(SENSOR_DATA, e2int(evt::iron_t::motion));
   }
@@ -164,8 +181,20 @@ float GyroSensor::getAccellTemp() {
 
 void GyroSensor::enable(){
   _clear();
+
+  esp_err_t err;
+  std::unique_ptr<nvs::NVSHandle> nvs = nvs::open_nvs_handle(T_Sensor, NVS_READONLY, &err);
+
+  // load configured motion threshold
+  if (err != ESP_OK) {
+    nvs->get_item(T_motionThr, _motionThreshold);
+  }
+
+  // start sensor polling
   if (_tmr_accel)
     xTimerStart( _tmr_accel, pdMS_TO_TICKS(10) );
+
+  LOGD(T_GYRO, printf, "gyro enabled, thr:%u\n", _motionThreshold);
 }
 
 void GyroSensor::disable(){
@@ -185,4 +214,84 @@ void GyroSensor::_clear(){
 void GyroSensor::_temperature_poll(){
   float t =  getAccellTemp();
   EVT_POST_DATA(SENSOR_DATA, e2int(evt::iron_t::acceltemp), &t, sizeof(t));
+}
+
+
+
+// *** VinSensor methods ***
+
+void VinSensor::init(){
+  // input voltage pin ADC
+  adc_vin.attach(VIN_PIN);
+
+  // start voltage polling
+  if (!_tmr_runner){
+    _tmr_runner = xTimerCreate("vinADC",
+                              pdMS_TO_TICKS(VIN_ADC_POLL_PERIOD),
+                              pdTRUE,
+                              static_cast<void*>(this),
+                              [](TimerHandle_t h) { static_cast<VinSensor*>(pvTimerGetTimerID(h))->_runner(); }
+                            );
+    // start poller right away
+    xTimerStart( _tmr_runner, pdMS_TO_TICKS(10) );
+  }
+
+/*
+  // subscribe to event bus
+  if (!_evt_set_handler){
+    esp_event_handler_instance_register_with(
+      evt::get_hndlr(),
+      IRON_SET_EVT,
+      e2int(evt::iron_t::sensorsReload),    // subscribe to 'sensorsReload command'
+      [](void* self, esp_event_base_t base, int32_t id, void* data) { static_cast<VinSensor*>(self)->enable(); },    // trigger config and timers reload
+      this,
+      &_evt_set_handler
+    );
+  }
+*/
+}
+
+VinSensor::~VinSensor(){
+  xTimerDelete( _tmr_runner, portMAX_DELAY );
+  _tmr_runner = nullptr;
+}
+
+// get supply voltage in mV 得到以mV为单位的电源电压
+void VinSensor::_runner(){
+  uint32_t voltage = 0;
+
+  for (uint8_t i = 0; i < 4; i++) {  // get 32 readings 得到32个读数
+    voltage += adc_vin.readMiliVolts();
+  }
+  voltage = voltage / 4 * 31.3f;
+
+  // log and publish Vin value
+  LOGD(T_ADC, printf, "Vin: %u mV\n", voltage);
+  EVT_POST_DATA(SENSOR_DATA, e2int(evt::iron_t::vin), &voltage, sizeof(voltage));
+
+
+  //  some calibration calc
+  //  // VIN_Ru = 100k, Rd_GND = 3.3K
+  //  if (value < 500)
+  //  {
+  //    voltage = value * 1390 * 31.3 / 4095 * 1.35;
+  //  }
+  //  else if (500 <= value && value < 1000)
+  //  {
+  //    voltage = value * 1390 * 31.3 / 4095 * 1.135;
+  //  }
+  //  else if (1000 <= value && value < 1500)
+  //  {
+  //    voltage = value * 1390 * 31.3 / 4095 * 1.071;
+  //  }
+  //  else if (1500 <= value && value < 2000)
+  //  {
+  //    voltage = value * 1390 * 31.3 / 4095;
+  //  }
+  //  else if (2000 <= value && value < 3000)
+  //  {
+  //    voltage = value * 1390 * 31.3 / 4095;
+  //  }
+  //  else
+  //    voltage = value * 1390 * 31.3 / 4095;
 }

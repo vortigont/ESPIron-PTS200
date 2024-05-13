@@ -23,6 +23,7 @@ ESP_EVENT_DECLARE_BASE(IRON_SET_EVT);       // ESPIron setter Commands events ba
 ESP_EVENT_DECLARE_BASE(IRON_GET_EVT);       // ESPIron getter Commands events base (in reply to this command, an IRON_STATE_EVT could be generated)
 ESP_EVENT_DECLARE_BASE(IRON_NOTIFY);        // ESPIron notification events base (those events are published when some state or mode changes due to any commands or component's logic)
 ESP_EVENT_DECLARE_BASE(IRON_STATE);         // ESPIron State publishing events base (those events are published on IRON_GET_EVT requests on demand)
+ESP_EVENT_DECLARE_BASE(IRON_VISET);         // ESPIron VisualSet HID events
 
 // cast enum to int
 template <class E>
@@ -40,11 +41,30 @@ enum class iron_t:int32_t {
 
   // Sensors data 100-199
   motion=100,               // motion detected from GyroSensor
-
   vin=110,                  // Vin voltage in millvolts, parameter uint32_t
-
   tiptemp=120,              // current Tip temperature, parameter int32_t
   acceltemp=121,            // accelerometer chip temperature, parameter float
+
+
+  // Commands
+  sensorsReload = 200,      // reload configuration for any sensors available
+  heaterTargetT,            // set heater target temperature, parameter int32_t
+  workTemp,                 // set working temperature, parameter int32_t
+  workModeToggle,           // toggle working mode on/off
+  boostModeToggle,          // toggle boost mode on/off
+
+  reloadTemp,               // reload temperature configuration
+
+  // State notifications
+  stateWorking = 300,
+  stateStandby,             // iron controller switched to 'Standby' mode
+  stateIdle,
+  stateSuspend,
+  stateBoost,               // iron controller switched to 'Boost' mode, parameter uint32_t - seconds left to disable boost mode
+  stateSetup,
+  stateNoTip,
+  tipEject,                 // sent by heater when it looses the tip sense
+  tipInsert,                // sent by heater when detect tip sensor
 
   // END
   noop_end                  // stub
