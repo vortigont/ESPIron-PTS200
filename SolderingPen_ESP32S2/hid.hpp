@@ -243,12 +243,20 @@ public:
  * 
  */
 class ViSet_TemperatureSetup : public MuiMenu {
+  // configured temperatures
+  Temperatures _temp;
+
+  // callback for "Save work temp" option
+  //void _cb_save_last_temp(size_t v);
+
   // menu builder function
   void _buildMenu();
 
 public:
   // c-tor
-  ViSet_TemperatureSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : MuiMenu(button, encoder) { _buildMenu(); }
+  ViSet_TemperatureSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder);
+  // d-tor
+  ~ViSet_TemperatureSetup();
 
 };
 

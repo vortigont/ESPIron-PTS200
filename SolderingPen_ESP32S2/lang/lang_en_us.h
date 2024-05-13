@@ -61,10 +61,14 @@ static constexpr const char* T_Information = "Information";
 static constexpr const char* T_Language = "Language";
 
 // Temperature settings menu
-static constexpr const char* T_Temp_SaveLastWrk = "Save work T";
-static constexpr const char* T_TempDefltWrk = "Default work T";
-static constexpr const char* T_TempSleep = "Standby temp";
-static constexpr const char* T_TempBoost = "Boost increase T";
+static constexpr const char* T_SaveLastT = "Save work temp.";
+static constexpr const char* T_TempDefltWrk = "Default temp.";
+static constexpr const char* T_TempSleep = "Standby temp.";
+static constexpr const char* T_TempBoost = "Boost step T";
+// Temperature settings hints
+static constexpr const char* T_SaveLast_box = "use last temp.";
+static constexpr const char* T_SaveLast_hint = "instead of default one";
+
 
 
 } // end  of namespace lang_en_us
@@ -74,13 +78,15 @@ static constexpr const char* T_TempBoost = "Boost increase T";
  * order of items MUST match enum dict_index
  * 
  */
-static constexpr std::array<const char *, D_____SIZE> dictionary = {
+static constexpr std::array<const char *, DICT___SIZE> dictionary = {
     lang_en_us::T_Boost,
     lang_en_us::T_Error,
     lang_en_us::T_Heating,
     lang_en_us::T_Idle,
     lang_en_us::T_NoTip,
     lang_en_us::T_return,
+    lang_en_us::T_SaveLast_box,
+    lang_en_us::T_SaveLast_hint,
     lang_en_us::T_Settings,
     lang_en_us::T_setT,
     lang_en_us::T_standby,
@@ -99,7 +105,7 @@ static constexpr std::array<const char *, MENU_MAIN_CFG_SIZE> menu_MainConfigura
 
 // Main Configuration menu items
 static constexpr std::array<const char *, MENU_TEMPERATURE_CFG_SIZE> menu_TemperatureOpts = {
-    lang_en_us::T_Temp_SaveLastWrk,
+    lang_en_us::T_SaveLastT,
     lang_en_us::T_TempDefltWrk,
     lang_en_us::T_TempSleep,
     lang_en_us::T_TempBoost,

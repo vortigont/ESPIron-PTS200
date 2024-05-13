@@ -21,13 +21,13 @@ esp_err_t nvs_blob_read(const char* nvsspace, const char* key, void* blob, size_
   std::unique_ptr<nvs::NVSHandle> nvs = nvs::open_nvs_handle(nvsspace, NVS_READONLY, &err);
 
   if (err != ESP_OK) {
-    LOGD(T_NVS, printf, "Err opening NVS namespace:%s RO, err:%s\n", nvsspace, esp_err_to_name(err));
+    LOGD(T_NVS, printf, "Err opening NVS ns:%s RO, err:%s\n", nvsspace, esp_err_to_name(err));
     return err;
   }
 
   err = nvs->get_blob(key, blob, len);
   if (err != ESP_OK) {
-    LOGD(T_NVS, printf, "Err reading NVS blob namespace:%s, key:%s, err:%s\n", nvsspace, key, esp_err_to_name(err));
+    LOGD(T_NVS, printf, "Err reading NVS blob ns:%s, key:%s, err:%s\n", nvsspace, key, esp_err_to_name(err));
   }
   return err;
 }
@@ -37,13 +37,13 @@ esp_err_t nvs_blob_write(const char* nvsspace, const char* key, void* blob, size
   std::unique_ptr<nvs::NVSHandle> nvs = nvs::open_nvs_handle(nvsspace, NVS_READWRITE, &err);
 
   if (err != ESP_OK) {
-    LOGD(T_NVS, printf, "Err opening NVS namespace:%s RW, err:%s\n", nvsspace, esp_err_to_name(err));
+    LOGD(T_NVS, printf, "Err opening NVS ns:%s RW, err:%s\n", nvsspace, esp_err_to_name(err));
     return err;
   }
 
   err = nvs->set_blob(key, blob, len);
   if (err != ESP_OK) {
-    LOGD(T_NVS, printf, "Err writing NVS namespace:%s, key:%s, err:%s\n", nvsspace, key, esp_err_to_name(err));
+    LOGD(T_NVS, printf, "Err writing NVS ns:%s, key:%s, err:%s\n", nvsspace, key, esp_err_to_name(err));
   }
   return err;
 }

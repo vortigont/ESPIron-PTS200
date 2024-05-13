@@ -17,8 +17,8 @@ static constexpr const char* T_UI = "UI";
 static constexpr const char* T_HID = "HID";
 
 // NVS keys
-static constexpr const char* T_timeouts = "timeouts";
-static constexpr const char* T_temperatures = "temperatures";
+static constexpr const char* T_timeouts = "timeouts";                   // blob with timeout values
+static constexpr const char* T_temperatures = "temperatures";           // blob with temperature values
 
-static constexpr const char* T_motionThr = "motionThr";              // motion threshold (uint32)
-static constexpr const char* T_lang = "lang";                        // UI language
+static constexpr const char* T_motionThr = "motionThr";                 // motion threshold (uint32)
+

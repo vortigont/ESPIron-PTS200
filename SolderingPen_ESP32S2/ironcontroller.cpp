@@ -44,6 +44,10 @@ void IronController::init(){
   // load temperature values from NVS
   nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
 
+  // if we are not saving working temp, then use default one instead
+  if (!_temp.savewrk)
+    _temp.working = _temp.deflt;
+
   // start mode switcher timer
   if (!_tmr_mode){
     _tmr_mode = xTimerCreate("modeT",
@@ -218,13 +222,25 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
       int32_t t = *reinterpret_cast<int32_t*>(data);
       if (t != _temp.working){
         _temp.working = *reinterpret_cast<int32_t*>(data);
-        nvs_blob_write(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
+        // save new working temp to NVS only if respective flag is set
+        if (_temp.savewrk)
+          nvs_blob_write(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
       }
       if (_state == ironState_t::working)
         EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::heaterTargetT), &_temp.working, sizeof(_temp.working));
       break;
     }
 
+    // reload temp configuration
+    case evt::iron_t::reloadTemp : {
+      LOGV(T_HID, println, "reload temp settings");
+      // load temperature values from NVS
+      nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
+
+      // if we are not saving working temp, then use default one instead
+      if (!_temp.savewrk)
+        _temp.working = _temp.deflt;
+    }
     // some
   }
 

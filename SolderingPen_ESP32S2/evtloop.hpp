@@ -53,6 +53,8 @@ enum class iron_t:int32_t {
   workModeToggle,           // toggle working mode on/off
   boostModeToggle,          // toggle boost mode on/off
 
+  reloadTemp,               // reload temperature configuration
+
   // State notifications
   stateWorking = 300,
   stateStandby,             // iron controller switched to 'Standby' mode

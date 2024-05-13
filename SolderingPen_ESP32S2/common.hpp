@@ -31,6 +31,7 @@ enum class ironState_t {
 
 // working temperature values
 struct Temperatures {
-    int32_t working{TEMP_DEFAULT}, standby{TEMP_SLEEP}, boost{TEMP_BOOST};
+    int32_t working{TEMP_DEFAULT}, standby{TEMP_SLEEP}, boost{TEMP_BOOST}, deflt{TEMP_DEFAULT};
+    bool savewrk{false};
 };
 

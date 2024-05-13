@@ -37,9 +37,11 @@ enum dict_index {
     D_idle,
     D_notip,
     D_return,
+    D_SaveLast_box,
+    D_SaveLast_hint,
     D_Settings,
     D_set_t,
     D_standby,
     D_Temp_SaveLastWrkDescr,
-    D_____SIZE
+    DICT___SIZE
 };

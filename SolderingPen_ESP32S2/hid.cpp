@@ -124,6 +124,7 @@ void IronHID::switchViSet(viset_evt_t v){
       viset = std::make_unique<ViSet_TemperatureSetup>(_btn, _encdr);
       break;
   };
+  LOGI(T_HID, printf, "heap:%u\n", ESP.getFreeHeap()/1024);
 }
 
 void IronHID::init(){
@@ -236,14 +237,15 @@ ViSet_MainScreen::ViSet_MainScreen(GPIOButton<ESPEventPolicy> &button, PseudoRot
 }
 
 ViSet_MainScreen::~ViSet_MainScreen(){
-  esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_VISET, ESP_EVENT_ANY_ID, _evt_snsr_handler);
+  esp_event_handler_instance_unregister_with(evt::get_hndlr(), SENSOR_DATA, ESP_EVENT_ANY_ID, _evt_snsr_handler);
   _evt_snsr_handler = nullptr;
-  esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_VISET, ESP_EVENT_ANY_ID, _evt_ntfy_handler);
+  esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_NOTIFY, ESP_EVENT_ANY_ID, _evt_ntfy_handler);
   _evt_ntfy_handler = nullptr;
-  esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_VISET, ESP_EVENT_ANY_ID, _evt_set_handler);
+  esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_SET_EVT, ESP_EVENT_ANY_ID, _evt_set_handler);
   _evt_set_handler = nullptr;
-  esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_VISET, ESP_EVENT_ANY_ID, _evt_state_handler);
+  esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_STATE, ESP_EVENT_ANY_ID, _evt_state_handler);
   _evt_state_handler = nullptr;
+  LOG(println, "d-tor ViSet_MainScreen");
 }
 
 void ViSet_MainScreen::drawScreen(){
@@ -577,7 +579,7 @@ void ViSet_MainMenu::_buildMenu(){
     [this](size_t idx){ _submenu_selector(idx); },                  // action callback
     MAIN_MENU_Y_SHIFT, 3,                                           // offset for each line of text and total number of lines in menu
     MAIN_MENU_X_OFFSET, MAIN_MENU_Y_OFFSET,                         // x,y cursor
-    MAIN_MENU_FONT2, NULL
+    MAIN_MENU_FONT2, MAIN_MENU_FONT2
   );
 
   // set dynamic list will act as page selector
@@ -604,6 +606,21 @@ void ViSet_MainMenu::_submenu_selector(size_t index){
 
 //  **************************************
 //  ***   Temperature Control Menu     ***
+
+ViSet_TemperatureSetup::ViSet_TemperatureSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : MuiMenu(button, encoder){
+  // load temperature values from NVS
+  nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
+
+  _buildMenu();
+}
+
+ViSet_TemperatureSetup::~ViSet_TemperatureSetup(){
+  //LOGD(T_HID, println, "save temp settings");
+  // save temp settings to NVS
+  nvs_blob_write(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
+  // send command to reload temp settings
+  EVT_POST(IRON_SET_EVT, e2int(iron_t::reloadTemp));
+}
 
 void ViSet_TemperatureSetup::_buildMenu(){
   // create page "Settings->Temperature"
@@ -643,9 +660,13 @@ void ViSet_TemperatureSetup::_buildMenu(){
   // page title element
   addItemToPage(page_title_id, page_savewrkT);
 
-  // checkbox
-  MuiItem_U8g2_CheckBox *box = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), "Some box with very long text here...", true, nullptr, MAINSCREEN_FONT, 0, 25);
+  // save last work temp checkbox
+  MuiItem_U8g2_CheckBox *box = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), dictionary[D_SaveLast_box], _temp.savewrk, [this](size_t v){ _temp.savewrk = v; }, MAINSCREEN_FONT, 0, 25);
   addMuippItem(box, page_savewrkT);
+
+  // text hint
+  MuiItem_U8g2_StaticText *txt = new MuiItem_U8g2_StaticText(u8g2, nextIndex(), dictionary[D_SaveLast_hint], MAIN_MENU_FONT1, 0, 25);
+  addMuippItem(txt, page_savewrkT);
 
   // generate idx for "Back Button" item
   muiItemId bbuton_id = nextIndex();
