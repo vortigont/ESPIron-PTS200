@@ -20,6 +20,11 @@
 #define MAIN_MENU_FONT2     u8g2_font_smart_patrol_nbp_tr
 // 10x14 OK!
 #define MAIN_MENU_FONT3     u8g2_font_unifont_t_cyrillic
+// 11x15
+#define PAGE_TITLE_FONT     u8g2_font_bauhaus2015_tr
+
+#define NUMERIC_FONT1       u8g2_font_profont29_tn
+
 
 // 12x17
 //#define MAIN_MENU_FONT3     u8g2_font_shylock_nbp_t_all
@@ -62,9 +67,9 @@ static constexpr const char* T_Language = "Language";
 
 // Temperature settings menu
 static constexpr const char* T_SaveLastT = "Save work temp.";
-static constexpr const char* T_TempDefltWrk = "Default temp.";
+static constexpr const char* T_TempDefltWrk = "Working temp.";
 static constexpr const char* T_TempSleep = "Standby temp.";
-static constexpr const char* T_TempBoost = "Boost step T";
+static constexpr const char* T_TempBoost = "Boost-up temp.";
 // Temperature settings hints
 static constexpr const char* T_SaveLast_box = "use last temp.";
 static constexpr const char* T_SaveLast_hint = "instead of default one";

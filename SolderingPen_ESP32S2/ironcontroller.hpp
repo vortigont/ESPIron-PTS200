@@ -22,11 +22,6 @@
  */
 class IronController {
 
-  struct Timeouts {
-    // all times are in milliseconds!
-    unsigned idle{TIMEOUT_IDLE}, standby{TIMEOUT_STANDBY}, suspend{TIMEOUT_SUSPEND}, boost{TIMEOUT_BOOST};
-  };
-
   struct TickStamps {
     // last time motion was detected
     TickType_t motion;
@@ -41,7 +36,7 @@ public:
 private:
 
   // current iron mode
-  ironState_t _state{0};
+  ironState_t _state{ironState_t::idle};
 
 
 

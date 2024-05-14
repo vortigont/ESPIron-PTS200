@@ -54,6 +54,7 @@ enum class iron_t:int32_t {
   boostModeToggle,          // toggle boost mode on/off
 
   reloadTemp,               // reload temperature configuration
+  reloadTimeouts,           // reload timeouts configuration
 
   // State notifications
   stateWorking = 300,

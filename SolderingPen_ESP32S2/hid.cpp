@@ -13,6 +13,7 @@
 #include "hid.hpp"
 #include "nvs.hpp"
 #include "const.h"
+#include <sstream>
 //#include "U8g2lib.h"  // https://github.com/olikraus/u8g2
 #include "lang/lang_en_us.h"
 #include "log.h"
@@ -111,20 +112,42 @@ void IronHID::_init_screen(){
 }
 
 void IronHID::switchViSet(viset_evt_t v){
-  // todo: do I need a locking mutex here?
+  // check if return to prev screen has been requested
+  if (v == viset_evt_t::goBack){
+    if (_vistack.size()){
+      _cur_viset = _vistack.back();
+      _vistack.pop_back();
+      return _viset_spawn(_cur_viset);
+    } else  // nowhere to return, go main screen ViSet
+      v = viset_evt_t::vsMainScreen;
+  } 
+
+  if (v == viset_evt_t::vsMainScreen){
+    // switching to mainScreen resets stack
+    _vistack.clear();
+    _cur_viset = viset_evt_t::vsMainScreen;
+  } else {
+    // save current ViSet to stack
+    _vistack.push_back(_cur_viset);
+  }
+  _cur_viset = v;
+  _viset_spawn(_cur_viset);
+  LOGI(T_HID, printf, "heap:%u\n", ESP.getFreeHeap()/1024);
+}
+
+void IronHID::_viset_spawn(viset_evt_t v){
   LOGI(T_HID, printf, "switch ViSet:%u\n", e2int(v));
   switch(v){
     case viset_evt_t::vsMainScreen :
       viset = std::make_unique<ViSet_MainScreen>(_btn, _encdr);
       break;
-    case viset_evt_t::vsMainMenu :
+    case viset_evt_t::vsMenuMain :
       viset = std::make_unique<ViSet_MainMenu>(_btn, _encdr);
       break;
     case viset_evt_t::vsMenuTemperature :
       viset = std::make_unique<ViSet_TemperatureSetup>(_btn, _encdr);
       break;
   };
-  LOGI(T_HID, printf, "heap:%u\n", ESP.getFreeHeap()/1024);
 }
 
 void IronHID::init(){
@@ -346,7 +369,7 @@ void ViSet_MainScreen::drawScreen(){
   // draw current temperature in big figures 用大数字绘制当前温度
   u8g2.setFont(u8g2_font_fub42_tn);
   u8g2.setFontPosTop();
-  u8g2.setCursor(15, 20);
+  u8g2.setCursor(15, 10);
   if (_tip_temp > TEMP_NOTIP)
     u8g2.print("Err");
   else
@@ -417,7 +440,7 @@ void ViSet_MainScreen::_evt_button(ESPButton::event_t e, const EventMsg* m){
 
     // use longPress to enter configuration menu
     case event_t::longPress :
-      EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMainMenu));
+      EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMenuMain));
       //switchScreen(vset_t::configMenu);
       break;
 
@@ -458,9 +481,9 @@ void MuiMenu::_evt_button(ESPButton::event_t e, const EventMsg* m){
     // Use click event to send 'enter/ok' to MUI menu
     case event_t::click :{
       auto e = muiEvent( mui_event(mui_event_t::enter) );
-      // signal switch to Main Work Screen in quitMenu event received
+      // signal switch to previous ViSet if quitMenu event received
       if (e.eid == mui_event_t::quitMenu){
-        EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMainScreen));
+        EVT_POST(IRON_VISET, e2int(parentvs));
       }
       break;
     }
@@ -468,7 +491,7 @@ void MuiMenu::_evt_button(ESPButton::event_t e, const EventMsg* m){
     // use longPress to escape current item
     case event_t::longPress : {
       auto e = muiEvent( mui_event(mui_event_t::escape) );
-      // signal switch to Main Work Screen in quitMenu event received
+      // signal switch to Main Work Screen if quitMenu event received, log press will always quit Menu to main screen
       if (e.eid == mui_event_t::quitMenu){
         EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMainScreen));
       }
@@ -585,6 +608,7 @@ void ViSet_MainMenu::_buildMenu(){
   // set dynamic list will act as page selector
   //menu->listopts.page_selector = true;
   menu->listopts.back_on_last = true;
+  menu->on_escape = mui_event_t::quitMenu;                          // quit menu on escape
   // move menu object into MuiPP page
   addMuippItem(menu, root_page);
   // root_page
@@ -600,6 +624,8 @@ void ViSet_MainMenu::_submenu_selector(size_t index){
     case 0 :  // temp settings
       EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMenuTemperature));
       break;
+    default:
+      EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMainScreen));
   }
 }
 
@@ -608,6 +634,8 @@ void ViSet_MainMenu::_submenu_selector(size_t index){
 //  ***   Temperature Control Menu     ***
 
 ViSet_TemperatureSetup::ViSet_TemperatureSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : MuiMenu(button, encoder){
+  // go back to prev viset on exit
+  parentvs = viset_evt_t::goBack;
   // load temperature values from NVS
   nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
 
@@ -627,9 +655,9 @@ void ViSet_TemperatureSetup::_buildMenu(){
   muiItemId root_page = makePage(menu_MainConfiguration.at(0));
 
   // generate idx for "Page title" item
-  muiItemId page_title_id = nextIndex();
+  //muiItemId page_title_menu = nextIndex();
   // create "Page title" item
-  MuiItem_pt p = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, page_title_id, MAIN_MENU_FONT1 );
+  MuiItem_pt p = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, nextIndex(), MAIN_MENU_FONT1 );
   // add item to menu and bind it to "Main Settings" page
   addMuippItem(std::move(p), root_page);
 
@@ -649,24 +677,27 @@ void ViSet_TemperatureSetup::_buildMenu(){
   // dynamic list will act as page selector
   list->listopts.page_selector = true;
   list->listopts.back_on_last = true;
+  list->on_escape = mui_event_t::prevPage;                          // go to previous page on escape
   // move menu object into MuiPP page
   addMuippItem(list, root_page);
-  // root_page
   pageAutoSelect(root_page, scroll_list_id);
 
-  // page "save work temp"
-  muiItemId page_savewrkT = makePage(menu_TemperatureOpts.at(0), root_page);
-
-  // page title element
-  addItemToPage(page_title_id, page_savewrkT);
+  // ***
+  // page "Save Work temp"
+  muiItemId page = makePage(menu_TemperatureOpts.at(0), root_page);
+  muiItemId title2_id = nextIndex();
+  // create "Page title" item
+  MuiItem_pt title2 = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, title2_id, PAGE_TITLE_FONT);
+  // add item to menu and bind it to "save work temp" page
+  addMuippItem(std::move(title2), page);
 
   // save last work temp checkbox
   MuiItem_U8g2_CheckBox *box = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), dictionary[D_SaveLast_box], _temp.savewrk, [this](size_t v){ _temp.savewrk = v; }, MAINSCREEN_FONT, 0, 25);
-  addMuippItem(box, page_savewrkT);
+  addMuippItem(box, page);
 
   // text hint
   MuiItem_U8g2_StaticText *txt = new MuiItem_U8g2_StaticText(u8g2, nextIndex(), dictionary[D_SaveLast_hint], MAIN_MENU_FONT1, 0, 25);
-  addMuippItem(txt, page_savewrkT);
+  addMuippItem(txt, page);
 
   // generate idx for "Back Button" item
   muiItemId bbuton_id = nextIndex();
@@ -674,14 +705,77 @@ void ViSet_TemperatureSetup::_buildMenu(){
   MuiItem_pt bb = std::make_shared< MuiItem_U8g2_BackButton > (u8g2, bbuton_id, dictionary[D_return], MAIN_MENU_FONT1, PAGE_BACK_BTN_X_OFFSET, PAGE_BACK_BTN_Y_OFFSET);
 
   // add item and bind it to "save work temp" page
-  addMuippItem(std::move(bb), page_savewrkT);
+  addMuippItem(std::move(bb), page);
+
+  // ***
+  // page "Default temp"
+  page = makePage(menu_TemperatureOpts.at(1), root_page);
+  // page title element
+  addItemToPage(title2_id, page);
+  muiItemId idx = nextIndex();
+  // create num slider
+  MuiItem_U8g2_NumberHSlide<int32_t> *hslide = new MuiItem_U8g2_NumberHSlide<int32_t>(
+    u8g2, idx,
+    NULL,
+    _temp.deflt,
+    TEMP_MIN, TEMP_MAX, TEMP_STEP,
+    int_to_string,
+    nullptr, nullptr, nullptr,
+    NUMERIC_FONT1, MAIN_MENU_FONT2,
+    u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, 10
+  );
+  hslide->on_escape = mui_event_t::prevPage; 
+  // add num slider
+  addMuippItem(hslide, page);
+  pageAutoSelect(page, idx);
 
 
+  // ***
+  // page "Standby temp"
+  page = makePage(menu_TemperatureOpts.at(2), root_page);
+  // page title element
+  addItemToPage(title2_id, page);
+  idx = nextIndex();
+  // create num slider
+  hslide = new MuiItem_U8g2_NumberHSlide<int32_t>(
+    u8g2, idx,
+    NULL,
+    _temp.standby,
+    TEMP_STANDBY_MIN, TEMP_STANDBY_MAX, TEMP_STANDBY_STEP,
+    int_to_string,
+    nullptr, nullptr, nullptr,
+    NUMERIC_FONT1, MAIN_MENU_FONT2,
+    u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, 10
+  );
+  hslide->on_escape = mui_event_t::prevPage; 
+  // add num slider
+  addMuippItem(hslide, page);
+  pageAutoSelect(page, idx);
   // back button
-  //addItemToPage(footer, root_page);
+  addItemToPage(bbuton_id, page);
 
-  // add item to menu and bind it to "Settings->Temperature" page
-  //addMuippItem(std::move(bb), root_page);
+
+  // ***
+  // page "Boost temp"
+  page = makePage(menu_TemperatureOpts.at(3), root_page);
+  // page title element
+  addItemToPage(title2_id, page);
+  idx = nextIndex();
+  // create num slider
+  hslide = new MuiItem_U8g2_NumberHSlide<int32_t>(
+    u8g2, idx,
+    NULL,
+    _temp.boost,
+    TEMP_BOOST_MIN, TEMP_BOOST_MAX, TEMP_BOOST_STEP,
+    int_to_string,
+    nullptr, nullptr, nullptr,
+    NUMERIC_FONT1, MAIN_MENU_FONT2,
+    u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, 10
+  );
+  hslide->on_escape = mui_event_t::prevPage; 
+  // add num slider
+  addMuippItem(hslide, page);
+  pageAutoSelect(page, idx);
 
   // start menu from root page
   menuStart(root_page);
@@ -690,8 +784,17 @@ void ViSet_TemperatureSetup::_buildMenu(){
 
 
 
+
+
 // *****************************
 // *** MUI entities
+
+std::string int_to_string(int32_t v){
+  std::ostringstream oss;
+  //oss << std::setprecision(1) << number;
+  oss << v;
+  return oss.str().data();
+}
 
 
 

@@ -43,9 +43,15 @@
 #define TEMP_MAX          450   // 最大温度
 #define TEMP_NOTIP        500   // virtual temperature threshold when tip is not installed
 #define TEMP_DEFAULT      220   // 默认温度
-#define TEMP_SLEEP        120   // 休眠温度
-#define TEMP_BOOST        50    // 升温步进
 #define TEMP_STEP         5     // temperature change step / 旋转编码器温度变化步进
+#define TEMP_STANDBY      120   // 休眠温度
+#define TEMP_STANDBY_MIN  100
+#define TEMP_STANDBY_MAX  180
+#define TEMP_STANDBY_STEP 10
+#define TEMP_BOOST        50    // 升温步进
+#define TEMP_BOOST_MIN    30
+#define TEMP_BOOST_MAX    100
+#define TEMP_BOOST_STEP   10
 #define POWER_LIMIT_15    170   // 功率限制
 #define POWER_LIMIT_20    255   // 功率限制
 #define POWER_LIMIT_20_2  127   // 功率限制

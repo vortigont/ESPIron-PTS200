@@ -21,11 +21,10 @@
  * 
  */
 enum class viset_evt_t {
-  noop,                 // no operation
   vsMainScreen,         // switch to Main work screen
-  vsMainMenu,           // switch to Main Menu
+  vsMenuMain,           // switch to Main Menu
   vsMenuTemperature,    // switch to Temperature setup menu
-  quitCfgMenu           // MuiPP menu exist
+  goBack                // switch to previous ViSet
 };
 
 /**
@@ -84,6 +83,11 @@ class IronHID {
   // Display object - an instance of visual set that represents displayed info on a screen 
   std::unique_ptr<VisualSet> viset;
 
+  viset_evt_t _cur_viset;
+
+  // stack of ViSet's we go through (for goBack navigation)
+  std::vector<viset_evt_t> _vistack;
+
   // screen redraw timer
   TimerHandle_t _tmr_display = nullptr;
 
@@ -103,11 +107,7 @@ class IronHID {
    */
   void _init_screen();
 
-  /**
-   * @brief button action handlers when iron is in menu configuration
-   * 
-   */
-  //void _button_config_menu(ESPButton::event_t e, const EventMsg* m);
+  void _viset_spawn(viset_evt_t v);
 
 public:
   // c-tor
@@ -193,6 +193,9 @@ public:
 class MuiMenu : public VisualSet, public MuiPlusPlus {
 
 protected:
+  // where to return to if this object gets quit event from MuiPlusPlus
+  viset_evt_t parentvs{viset_evt_t::vsMainScreen};
+
   // screen refresh required
   bool _rr{true};
 
@@ -259,6 +262,12 @@ public:
   ~ViSet_TemperatureSetup();
 
 };
+
+
+
+// **************************
+// Helper functions
+std::string int_to_string(int32_t v);
 
 
 

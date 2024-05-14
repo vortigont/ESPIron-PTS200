@@ -148,7 +148,7 @@ void setup() {
   // initialize acceleration sensor
   //accel.init();
 
-  // intit voltage sensor
+  // init voltage sensor
   //vin.init();
 
   // initialize HID (buttons controls and navigation, screen)
@@ -157,7 +157,6 @@ void setup() {
 
   // long beep for setup completion 安装完成时长哔哔声
   beep();
-  //beep();
 }
 
 void loop() {
