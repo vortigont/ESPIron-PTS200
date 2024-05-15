@@ -39,7 +39,7 @@ IronController::~IronController(){
 void IronController::init(){
 
   // load timeout values from NVS
-  nvs_blob_read(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(Timeouts));
+  nvs_blob_read(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(IronTimeouts));
 
   // load temperature values from NVS
   nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
@@ -240,7 +240,17 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
       // if we are not saving working temp, then use default one instead
       if (!_temp.savewrk)
         _temp.working = _temp.deflt;
+      break;
     }
+
+    // reload temp timers
+    case evt::iron_t::reloadTimeouts :
+      LOGV(T_HID, println, "reload timers settings");
+      // load timeout values from NVS
+      nvs_blob_read(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(IronTimeouts));
+      break;
+
+
     // some
   }
 

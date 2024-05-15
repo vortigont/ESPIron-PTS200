@@ -35,8 +35,8 @@ struct Temperatures {
     bool savewrk{false};
 };
 
-struct Timeouts {
-// all times are in milliseconds!
-unsigned idle{TIMEOUT_IDLE}, standby{TIMEOUT_STANDBY}, suspend{TIMEOUT_SUSPEND}, boost{TIMEOUT_BOOST};
+struct IronTimeouts {
+    // all times are in milliseconds!
+    unsigned standby{TIMEOUT_STANDBY}, idle{TIMEOUT_IDLE},  suspend{TIMEOUT_SUSPEND}, boost{TIMEOUT_BOOST};
 };
 

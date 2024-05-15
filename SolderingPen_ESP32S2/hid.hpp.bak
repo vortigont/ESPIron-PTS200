@@ -249,11 +249,10 @@ public:
  */
 class ViSet_TemperatureSetup : public MuiMenu {
   // configured temperatures
-  //Temperatures _temp;
-  // values that this section controls, -2 is for 'SaveLast' flag and 'back' button
-  std::array<int32_t, menu_TemperatureOpts.size()-2> _temp;
-  // save work flag
-  bool save_work;
+  Temperatures _temp;
+
+  // callback for "Save work temp" option
+  //void _cb_save_last_temp(size_t v);
 
   // menu builder function
   void _buildMenu();
@@ -273,8 +272,8 @@ public:
  */
 class ViSet_TimeoutsSetup : public MuiMenu {
   // configured timeouts
-  //IronTimeouts _timeout;
-  std::array<unsigned, menu_TimeoutOpts.size()-1> _timeout;
+  IronTimeouts _timeout;
+  //std::array<unsigned, menu_TimeoutOpts.size()-1> _timeout;
 
   // callback for "Save work temp" option
   //void _cb_save_last_temp(size_t v);
@@ -293,7 +292,7 @@ public:
 
 // **************************
 // Helper functions
-std::string numeric_to_string(int32_t v);
+std::string int_to_string(int32_t v);
 
 
 

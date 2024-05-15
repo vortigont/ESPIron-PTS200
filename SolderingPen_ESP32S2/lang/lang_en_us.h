@@ -33,23 +33,28 @@
 
 #define MAIN_MENU_X_OFFSET  10
 #define MAIN_MENU_Y_OFFSET  12
-#define MAIN_MENU_Y_SHIFT   15
+#define MAIN_MENU_Y_SHIFT   18
 
 #define PAGE_BACK_BTN_X_OFFSET  100
 #define PAGE_BACK_BTN_Y_OFFSET  50
+
+#define NUMBERSLIDE_X_OFFSET    10
+
 
 // EN-US
 namespace lang_en_us {
 
 // EN US
-static constexpr const char* T_Boost = "Boost";
-static constexpr const char* T_Error = "Error";
-static constexpr const char* T_Heating = "Heating";
-static constexpr const char* T_Idle = "Idle";
-static constexpr const char* T_NoTip = "No tip!";           // state display when tip is missing
-static constexpr const char* T_setT = "Set:";               // Target temperature on main screen
-static constexpr const char* T_standby = "Standby";         // state display in 'Standby'
-static constexpr const char* T_return = "<Back";            // return back in menu's
+static constexpr const char* T_Boost        = "Boost";
+static constexpr const char* T_Error        = "Error";
+static constexpr const char* T_Heating      = "Heating";
+static constexpr const char* T_Idle         = "Idle";
+static constexpr const char* T_min          = "min.";               // short for 'minutes'
+static constexpr const char* T_NoTip        = "No tip!";            // state display when tip is missing
+static constexpr const char* T_sec          = "sec.";               // short for 'seconds'
+static constexpr const char* T_setT         = "Set:";               // Target temperature on main screen
+static constexpr const char* T_standby      = "Standby";            // state display in 'Standby'
+static constexpr const char* T_return       = "<Back";              // return back in menu's
 
 // Temp settings descr
 static constexpr const char* T_Temp_SaveLastWrkDescr = "Save last work Temperature";
@@ -68,11 +73,17 @@ static constexpr const char* T_Language = "Language";
 // Temperature settings menu
 static constexpr const char* T_SaveLastT = "Save work temp.";
 static constexpr const char* T_TempDefltWrk = "Working temp.";
-static constexpr const char* T_TempSleep = "Standby temp.";
+static constexpr const char* T_TempStandby = "Standby temp.";
 static constexpr const char* T_TempBoost = "Boost-up temp.";
 // Temperature settings hints
 static constexpr const char* T_SaveLast_box = "use last temp.";
 static constexpr const char* T_SaveLast_hint = "instead of default one";
+
+// Timeouts settings menu
+static constexpr const char* T_TimeStandby = "Standby timeout";
+static constexpr const char* T_TimeIdle = "Idle timeout";
+static constexpr const char* T_TimeSuspend = "Suspend timeout";
+static constexpr const char* T_TimeBoost = "Boost timeout";
 
 
 
@@ -88,8 +99,10 @@ static constexpr std::array<const char *, DICT___SIZE> dictionary = {
     lang_en_us::T_Error,
     lang_en_us::T_Heating,
     lang_en_us::T_Idle,
+    lang_en_us::T_min,
     lang_en_us::T_NoTip,
     lang_en_us::T_return,
+    lang_en_us::T_sec,
     lang_en_us::T_SaveLast_box,
     lang_en_us::T_SaveLast_hint,
     lang_en_us::T_Settings,
@@ -108,11 +121,20 @@ static constexpr std::array<const char *, MENU_MAIN_CFG_SIZE> menu_MainConfigura
     lang_en_us::T_return
 };
 
-// Main Configuration menu items
+// Temperature menu items
 static constexpr std::array<const char *, MENU_TEMPERATURE_CFG_SIZE> menu_TemperatureOpts = {
-    lang_en_us::T_SaveLastT,
     lang_en_us::T_TempDefltWrk,
-    lang_en_us::T_TempSleep,
+    lang_en_us::T_TempStandby,
     lang_en_us::T_TempBoost,
+    lang_en_us::T_SaveLastT,
+    lang_en_us::T_return
+};
+
+// Timeout menu items
+static constexpr std::array<const char *, MENU_TIMEOUTS_CFG_SIZE> menu_TimeoutOpts = {
+    lang_en_us::T_TimeStandby,
+    lang_en_us::T_TimeIdle,
+    lang_en_us::T_TimeSuspend,
+    lang_en_us::T_TimeBoost,
     lang_en_us::T_return
 };

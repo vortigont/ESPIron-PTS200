@@ -39,11 +39,11 @@
 
 // Default temperature control value (recommended soldering temperature: 300~380°C)
 // 默认温度控制值(推荐焊接温度:300~380°C)
+#define TEMP_DEFAULT      220   // 默认温度
 #define TEMP_MIN          150   // 最小温度
 #define TEMP_MAX          450   // 最大温度
-#define TEMP_NOTIP        500   // virtual temperature threshold when tip is not installed
-#define TEMP_DEFAULT      220   // 默认温度
 #define TEMP_STEP         5     // temperature change step / 旋转编码器温度变化步进
+#define TEMP_NOTIP        500   // virtual temperature threshold when tip is not installed
 #define TEMP_STANDBY      120   // 休眠温度
 #define TEMP_STANDBY_MIN  100
 #define TEMP_STANDBY_MAX  180
@@ -52,6 +52,7 @@
 #define TEMP_BOOST_MIN    30
 #define TEMP_BOOST_MAX    100
 #define TEMP_BOOST_STEP   10
+
 #define POWER_LIMIT_15    170   // 功率限制
 #define POWER_LIMIT_20    255   // 功率限制
 #define POWER_LIMIT_20_2  127   // 功率限制
@@ -67,11 +68,25 @@
 #define TIPNAME           "PTS  " // default tip name
 
 // Default timeout values, in milliseconds
-#define TIMEOUT_STANDBY     60000       // standby time, when heater lowers it's temperature
-#define TIMEOUT_IDLE        300000      // idle mode timeout, when Iron switches off the heater after a certain period of inactivity
-#define TIMEOUT_SUSPEND     1200000     // suspend timeout
-#define TIMEOUT_BOOST       60000       // boost mode duration / 停留在加热模式多少秒
-#define WAKEUP_THRESHOLD  10    // MPU vibration detection accuracy, the smaller the value, the more sensitive it is / MPU 震动检测精度，数值越小，越灵敏
+#define TIMEOUT_STANDBY         60000       // standby time, when heater lowers it's temperature
+#define TIMEOUT_STANDBY_MIN     30          // sec
+#define TIMEOUT_STANDBY_MAX     180         // sec
+#define TIMEOUT_STANDBY_STEP    30          // sec
+#define TIMEOUT_IDLE            300000      // idle mode timeout, when Iron switches off the heater after a certain period of inactivity, ms
+#define TIMEOUT_IDLE_MIN        3           // min
+#define TIMEOUT_IDLE_MAX        15          // min
+#define TIMEOUT_IDLE_STEP       1           // min
+#define TIMEOUT_SUSPEND         1200000     // suspend timeout
+#define TIMEOUT_SUSPEND_MIN     15          // min
+#define TIMEOUT_SUSPEND_MAX     120         // min
+#define TIMEOUT_SUSPEND_STEP    15          // min
+#define TIMEOUT_BOOST           60000       // boost mode duration / 停留在加热模式多少秒
+#define TIMEOUT_BOOST_MIN       15          // sec
+#define TIMEOUT_BOOST_MAX       180         // sec
+#define TIMEOUT_BOOST_STEP      15          // sec
+
+// MPU vibration detection accuracy, the smaller the value, the more sensitive it is / MPU 震动检测精度，数值越小，越灵敏
+#define WAKEUP_THRESHOLD        10
 
 // Control values
 #define TIME2SETTLE       5000  // The time in microseconds allowed for the OpAmp output to stabilize / 以微秒为单位的时间允许OpAmp输出稳定

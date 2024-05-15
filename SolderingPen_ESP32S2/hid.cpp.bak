@@ -55,6 +55,29 @@ U8G2_SH1107_64X128_F_HW_I2C u8g2(U8G2_R1, SH1107_RST_PIN);
 using ESPButton::event_t;
 using evt::iron_t;
 
+// defailt timeout values
+constexpr std::array<int32_t, 4> def_timeouts_min = {
+  TIMEOUT_STANDBY_MIN,
+  TIMEOUT_IDLE_MIN,
+  TIMEOUT_SUSPEND_MIN,
+  TIMEOUT_BOOST_MIN
+};
+
+constexpr std::array<int32_t, 4> def_timeouts_max = {
+  TIMEOUT_STANDBY_MAX,
+  TIMEOUT_IDLE_MAX,
+  TIMEOUT_SUSPEND_MAX,
+  TIMEOUT_BOOST_MAX
+};
+
+constexpr std::array<int32_t, 4> def_timeouts_step = {
+  TIMEOUT_STANDBY_STEP,
+  TIMEOUT_IDLE_STEP,
+  TIMEOUT_SUSPEND_STEP,
+  TIMEOUT_BOOST_STEP
+};
+
+
 //  *********************
 //  ***   IronHID     ***
 
@@ -640,51 +663,21 @@ void ViSet_MainMenu::_submenu_selector(size_t index){
 ViSet_TemperatureSetup::ViSet_TemperatureSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : MuiMenu(button, encoder){
   // go back to prev viset on exit
   parentvs = viset_evt_t::goBack;
-  Temperatures t;
   // load temperature values from NVS
-  nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(decltype(t)));
+  nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
 
-  _temp.at(0) = t.deflt;
-  _temp.at(1) = t.standby;
-  _temp.at(2) = t.boost;
-  save_work = t.savewrk;
   _buildMenu();
 }
 
 ViSet_TemperatureSetup::~ViSet_TemperatureSetup(){
   //LOGD(T_HID, println, "save temp settings");
   // save temp settings to NVS
-  Temperatures t;
-  nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&t), sizeof(decltype(t)));
-  t.deflt   =  _temp.at(0);
-  t.standby =  _temp.at(1);
-  t.boost   =  _temp.at(2);
-  t.savewrk =  save_work;
-  nvs_blob_write(T_IRON, T_temperatures, static_cast<void*>(&t), sizeof(decltype(t)));
+  nvs_blob_write(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
   // send command to reload temp settings
   EVT_POST(IRON_SET_EVT, e2int(iron_t::reloadTemp));
 }
 
 void ViSet_TemperatureSetup::_buildMenu(){
-  // default timeout values
-  constexpr std::array<int32_t, menu_TemperatureOpts.size()-2> def_temp_min = {
-    TEMP_MIN,
-    TEMP_STANDBY_MIN,
-    TEMP_BOOST_MIN
-  };
-
-  constexpr std::array<int32_t, menu_TemperatureOpts.size()-2> def_temp_max = {
-    TEMP_MAX,
-    TEMP_STANDBY_MAX,
-    TEMP_BOOST_MAX
-  };
-
-  constexpr std::array<int32_t, menu_TemperatureOpts.size()-2> def_temp_step = {
-    TEMP_STEP,
-    TEMP_STANDBY_STEP,
-    TEMP_BOOST_STEP
-  };
-
   // create page "Settings->Temperature"
   muiItemId root_page = makePage(menu_MainConfiguration.at(0));
 
@@ -699,7 +692,7 @@ void ViSet_TemperatureSetup::_buildMenu(){
   muiItemId scroll_list_id = nextIndex();
 
   // Temperature menu dynamic scroll list
-  auto list = new MuiItem_U8g2_DynamicScrollList(u8g2, scroll_list_id,
+  MuiItem_U8g2_DynamicScrollList *list = new MuiItem_U8g2_DynamicScrollList(u8g2, scroll_list_id,
     [](size_t index){ /* Serial.printf("idx:%u\n", index); */ return menu_TemperatureOpts.at(index); },   // this lambda will feed localized strings to the MuiItem list builder class
     [](){ return menu_TemperatureOpts.size(); },
     nullptr,                                                        // action callback
@@ -716,64 +709,100 @@ void ViSet_TemperatureSetup::_buildMenu(){
   addMuippItem(list, root_page);
   pageAutoSelect(root_page, scroll_list_id);
 
-
-  // create "Page title" item
-  muiItemId title2_id = nextIndex();
-  MuiItem_pt title2 = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, title2_id, PAGE_TITLE_FONT);
-  // add item to menu, I'll add it to other pages later on
-  addMuippItem(std::move(title2));
-
-  // autogenerate items for each temperature setting value
-  for (auto i = 0; i != _temp.size(); ++i){
-    // make page, bound to root page
-    muiItemId page = makePage(menu_TemperatureOpts.at(i), root_page);
-    // add page title element
-    addItemToPage(title2_id, page);
-    // create num slider Mui Item
-    muiItemId idx = nextIndex();
-    auto hslide = new MuiItem_U8g2_NumberHSlide<int32_t>(
-      u8g2, idx,
-      NULL,   // label
-      _temp.at(i),
-      def_temp_min[i], def_temp_max[i], def_temp_step[i],
-      numeric_to_string,
-      nullptr, nullptr, nullptr,
-      NUMERIC_FONT1, MAIN_MENU_FONT2,
-      u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, NUMBERSLIDE_X_OFFSET
-    );
-    // since this item is the only active on the page, return to prev page on unselect
-    hslide->on_escape = mui_event_t::prevPage;
-    // add num slider to page
-    addMuippItem(hslide, page);
-    // autoselect this item
-    pageAutoSelect(page, idx);
-
-/*
-    // todo: add celsius/farenh label
-    // value label hint position in the bottom center of screen
-    auto txt = new MuiItem_U8g2_StaticText(u8g2, nextIndex(), def_timeouts_label[i], PAGE_TITLE_FONT, u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight());
-    txt->h_align = text_align_t::bottom;
-    txt->v_align = text_align_t::center;
-    addMuippItem(txt, page);
-*/
-  }
-
-
   // ***
-  // page "Save Work temp" checkbox
-  muiItemId page = makePage(menu_TemperatureOpts.back(), root_page);
-  MuiItem_U8g2_CheckBox *box = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), dictionary[D_SaveLast_box], save_work, [this](size_t v){ save_work = v; }, MAINSCREEN_FONT, 0, 25);
+  // page "Save Work temp"
+  muiItemId page = makePage(menu_TemperatureOpts.at(0), root_page);
+  muiItemId title2_id = nextIndex();
+  // create "Page title" item
+  MuiItem_pt title2 = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, title2_id, PAGE_TITLE_FONT);
+  // add item to menu and bind it to "save work temp" page
+  addMuippItem(std::move(title2), page);
+
+  // save last work temp checkbox
+  MuiItem_U8g2_CheckBox *box = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), dictionary[D_SaveLast_box], _temp.savewrk, [this](size_t v){ _temp.savewrk = v; }, MAINSCREEN_FONT, 0, 25);
   addMuippItem(box, page);
 
   // text hint
   MuiItem_U8g2_StaticText *txt = new MuiItem_U8g2_StaticText(u8g2, nextIndex(), dictionary[D_SaveLast_hint], MAIN_MENU_FONT1, 0, 25);
   addMuippItem(txt, page);
 
+  // generate idx for "Back Button" item
+  muiItemId bbuton_id = nextIndex();
   // create "Back Button" item
-  auto bb = new MuiItem_U8g2_BackButton (u8g2, nextIndex(), dictionary[D_return], MAIN_MENU_FONT1, PAGE_BACK_BTN_X_OFFSET, PAGE_BACK_BTN_Y_OFFSET);
+  MuiItem_pt bb = std::make_shared< MuiItem_U8g2_BackButton > (u8g2, bbuton_id, dictionary[D_return], MAIN_MENU_FONT1, PAGE_BACK_BTN_X_OFFSET, PAGE_BACK_BTN_Y_OFFSET);
 
   // add item and bind it to "save work temp" page
-  addMuippItem(bb, page);
+  addMuippItem(std::move(bb), page);
+
+  // ***
+  // page "Default temp"
+  page = makePage(menu_TemperatureOpts.at(1), root_page);
+  // page title element
+  addItemToPage(title2_id, page);
+  muiItemId idx = nextIndex();
+  // create num slider
+  MuiItem_U8g2_NumberHSlide<int32_t> *hslide = new MuiItem_U8g2_NumberHSlide<int32_t>(
+    u8g2, idx,
+    NULL,
+    _temp.deflt,
+    TEMP_MIN, TEMP_MAX, TEMP_STEP,
+    int_to_string,
+    nullptr, nullptr, nullptr,
+    NUMERIC_FONT1, MAIN_MENU_FONT2,
+    u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, 10
+  );
+  hslide->on_escape = mui_event_t::prevPage; 
+  // add num slider
+  addMuippItem(hslide, page);
+  pageAutoSelect(page, idx);
+
+
+  // ***
+  // page "Standby temp"
+  page = makePage(menu_TemperatureOpts.at(2), root_page);
+  // page title element
+  addItemToPage(title2_id, page);
+  idx = nextIndex();
+  // create num slider
+  hslide = new MuiItem_U8g2_NumberHSlide<int32_t>(
+    u8g2, idx,
+    NULL,
+    _temp.standby,
+    TEMP_STANDBY_MIN, TEMP_STANDBY_MAX, TEMP_STANDBY_STEP,
+    int_to_string,
+    nullptr, nullptr, nullptr,
+    NUMERIC_FONT1, MAIN_MENU_FONT2,
+    u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, 10
+  );
+  hslide->on_escape = mui_event_t::prevPage; 
+  // add num slider
+  addMuippItem(hslide, page);
+  pageAutoSelect(page, idx);
+  // back button
+  addItemToPage(bbuton_id, page);
+
+
+  // ***
+  // page "Boost temp"
+  page = makePage(menu_TemperatureOpts.at(3), root_page);
+  // page title element
+  addItemToPage(title2_id, page);
+  idx = nextIndex();
+  // create num slider
+  hslide = new MuiItem_U8g2_NumberHSlide<int32_t>(
+    u8g2, idx,
+    NULL,
+    _temp.boost,
+    TEMP_BOOST_MIN, TEMP_BOOST_MAX, TEMP_BOOST_STEP,
+    int_to_string,
+    nullptr, nullptr, nullptr,
+    NUMERIC_FONT1, MAIN_MENU_FONT2,
+    u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, 10
+  );
+  hslide->on_escape = mui_event_t::prevPage; 
+  // add num slider
+  addMuippItem(hslide, page);
+  pageAutoSelect(page, idx);
 
   // start menu from root page
   menuStart(root_page);
@@ -787,77 +816,42 @@ void ViSet_TemperatureSetup::_buildMenu(){
 ViSet_TimeoutsSetup::ViSet_TimeoutsSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : MuiMenu(button, encoder){
   // go back to prev viset on exit
   parentvs = viset_evt_t::goBack;
-  IronTimeouts t;
   // load temperature values from NVS
-  nvs_blob_read(T_IRON, T_timeouts, static_cast<void*>(&t), sizeof(decltype(t)));
+  nvs_blob_read(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(IronTimeouts));
   // this is ugly, but I do not want to work with ms in menu
-/*
   _timeout.idle    /= 60000;  // min
   _timeout.standby /= 1000;   // sec   
   _timeout.suspend /= 60000;  // min
   _timeout.boost   /= 1000;   // sec
+
+/*
+  _timeout.at(0) = t.idle / 1000;
+  _timeout.at(1) = t.standby / 1000;
+  _timeout.at(2) = t.suspend / 1000;
+  _timeout.at(3) = t.boost / 1000;
 */
-//
-  _timeout.at(0) = t.standby / 60000;   // min
-  _timeout.at(1) = t.idle / 1000;       // sec 
-  _timeout.at(2) = t.suspend / 60000;   // min
-  _timeout.at(3) = t.boost / 1000;      // sec
-//
   _buildMenu();
 }
 
 ViSet_TimeoutsSetup::~ViSet_TimeoutsSetup(){
-/*
   _timeout.idle    *= 60000;
   _timeout.standby *= 1000;
   _timeout.suspend *= 60000;
   _timeout.boost   *= 1000;
-*/
-  IronTimeouts t;
-//
-  t.standby = _timeout.at(0) * 60000;
-  t.idle    = _timeout.at(1) * 1000;
-  t.suspend = _timeout.at(2) * 60000;
-  t.boost   = _timeout.at(3) * 1000;
-//
 
+/*
+  t.idle    = _timeout.at(0) * 1000;
+  t.standby = _timeout.at(1) * 1000;
+  t.suspend = _timeout.at(2) * 1000;
+  t.boost   = _timeout.at(3) * 1000;
+*/
   // save temp settings to NVS
-  nvs_blob_write(T_IRON, T_timeouts, static_cast<void*>(&t), sizeof(decltype(t)));
+  nvs_blob_write(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(IronTimeouts));
   // send command to reload temp settings
   EVT_POST(IRON_SET_EVT, e2int(iron_t::reloadTimeouts));
 }
 
 void ViSet_TimeoutsSetup::_buildMenu(){
-  // default timeout values
-  constexpr std::array<int32_t, 4> def_timeouts_min = {
-    TIMEOUT_STANDBY_MIN,
-    TIMEOUT_IDLE_MIN,
-    TIMEOUT_SUSPEND_MIN,
-    TIMEOUT_BOOST_MIN
-  };
-
-  constexpr std::array<int32_t, 4> def_timeouts_max = {
-    TIMEOUT_STANDBY_MAX,
-    TIMEOUT_IDLE_MAX,
-    TIMEOUT_SUSPEND_MAX,
-    TIMEOUT_BOOST_MAX
-  };
-
-  constexpr std::array<int32_t, 4> def_timeouts_step = {
-    TIMEOUT_STANDBY_STEP,
-    TIMEOUT_IDLE_STEP,
-    TIMEOUT_SUSPEND_STEP,
-    TIMEOUT_BOOST_STEP
-  };
-
-  constexpr std::array<const char*, 4> def_timeouts_label = {
-    dictionary[D_min],
-    dictionary[D_sec],
-    dictionary[D_min],
-    dictionary[D_sec]
-  };
-
-
   // create page "Settings->Timeouts"
   muiItemId root_page = makePage(menu_MainConfiguration.at(1));
 
@@ -870,7 +864,7 @@ void ViSet_TimeoutsSetup::_buildMenu(){
   muiItemId scroll_list_id = nextIndex();
 
   // Timeouts menu dynamic scroll list
-  auto list = new MuiItem_U8g2_DynamicScrollList(u8g2, scroll_list_id,
+  MuiItem_U8g2_DynamicScrollList *list = new MuiItem_U8g2_DynamicScrollList(u8g2, scroll_list_id,
     [](size_t index){ return menu_TimeoutOpts.at(index); },         // this lambda will feed localized strings to the MuiItem list builder class
     [](){ return menu_TimeoutOpts.size(); },
     nullptr,                                                        // action callback
@@ -888,43 +882,92 @@ void ViSet_TimeoutsSetup::_buildMenu(){
   pageAutoSelect(root_page, scroll_list_id);                        // the only item on page must be autoselected
 
 
-  // create "Page title" item
   muiItemId title2_id = nextIndex();
+  // create "Page title" item
   MuiItem_pt title2 = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, title2_id, PAGE_TITLE_FONT);
-  // add item to menu, I'll add it to other pages later on
+  // add item to menu, I'll add it to pages later on
   addMuippItem(std::move(title2));
 
-  // autogenerate items for each timeout setting value
-  for (auto i = 0; i != _timeout.size(); ++i){
-    // make page, bound to root page
-    muiItemId page = makePage(menu_TimeoutOpts.at(i), root_page);
-    // add page title element
-    addItemToPage(title2_id, page);
-    // create num slider Mui Item
-    muiItemId idx = nextIndex();
-    auto hslide = new MuiItem_U8g2_NumberHSlide<unsigned>(
-      u8g2, idx,
-      NULL,   // label
-      _timeout.at(i),
-      def_timeouts_min[i], def_timeouts_max[i], def_timeouts_step[i],
-      numeric_to_string,
-      nullptr, nullptr, nullptr,
-      NUMERIC_FONT1, MAIN_MENU_FONT2,
-      u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, NUMBERSLIDE_X_OFFSET
-    );
-    // since this item is the only active on the page, return to prev page on unselect
-    hslide->on_escape = mui_event_t::prevPage;
-    // add num slider to page
-    addMuippItem(hslide, page);
-    // autoselect this item
-    pageAutoSelect(page, idx);
+  // autogenerate items for each timeout opt in an array except last one (<back)
 
-    // value label hint position in the bottom center of screen
-    auto txt = new MuiItem_U8g2_StaticText(u8g2, nextIndex(), def_timeouts_label[i], PAGE_TITLE_FONT, u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight());
-    txt->h_align = text_align_t::bottom;
-    txt->v_align = text_align_t::center;
-    addMuippItem(txt, page);
-  }
+  // make page, bound to root page
+  muiItemId page = makePage(menu_TimeoutOpts.at(0), root_page);
+  // add page title element
+  addItemToPage(title2_id, page);
+
+  // create num slider for Standby
+  muiItemId idx = nextIndex();
+  MuiItem_U8g2_NumberHSlide<unsigned> *hslide = new MuiItem_U8g2_NumberHSlide<unsigned>(
+    u8g2, idx,
+    NULL,
+    _timeout.standby,
+    def_timeouts_min[0], TIMEOUT_STANDBY_MAX, TIMEOUT_STANDBY_STEP,  //TIMEOUT_STANDBY_MIN
+    int_to_string,
+    nullptr, nullptr, nullptr,
+    NUMERIC_FONT1, MAIN_MENU_FONT2,
+    u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, 10
+  );
+  hslide->on_escape = mui_event_t::prevPage;
+  // add num slider to page
+  addMuippItem(hslide, page);
+  pageAutoSelect(page, idx);
+
+  // create num slider for Idle
+  page = makePage(menu_TimeoutOpts.at(1), root_page);
+  addItemToPage(title2_id, page);
+  idx = nextIndex();
+  hslide = new MuiItem_U8g2_NumberHSlide<unsigned>(
+    u8g2, idx,
+    NULL,
+    _timeout.idle,
+    TIMEOUT_IDLE_MIN, TIMEOUT_IDLE_MAX, TIMEOUT_IDLE_STEP,
+    int_to_string,
+    nullptr, nullptr, nullptr,
+    NUMERIC_FONT1, MAIN_MENU_FONT2,
+    u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, 10
+  );
+  hslide->on_escape = mui_event_t::prevPage;
+  // add num slider to page
+  addMuippItem(hslide, page);
+  pageAutoSelect(page, idx);
+
+  // create num slider for Suspend
+  page = makePage(menu_TimeoutOpts.at(2), root_page);
+  addItemToPage(title2_id, page);
+  idx = nextIndex();
+  hslide = new MuiItem_U8g2_NumberHSlide<unsigned>(
+    u8g2, idx,
+    NULL,
+    _timeout.idle,
+    TIMEOUT_SUSPEND_MIN, TIMEOUT_SUSPEND_MAX, TIMEOUT_SUSPEND_STEP,
+    int_to_string,
+    nullptr, nullptr, nullptr,
+    NUMERIC_FONT1, MAIN_MENU_FONT2,
+    u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, 10
+  );
+  hslide->on_escape = mui_event_t::prevPage;
+  // add num slider to page
+  addMuippItem(hslide, page);
+  pageAutoSelect(page, idx);
+
+  // create num slider for Boost
+  page = makePage(menu_TimeoutOpts.at(3), root_page);
+  addItemToPage(title2_id, page);
+  idx = nextIndex();
+  hslide = new MuiItem_U8g2_NumberHSlide<unsigned>(
+    u8g2, idx,
+    NULL,
+    _timeout.idle,
+    TIMEOUT_BOOST_MIN, TIMEOUT_BOOST_MAX, TIMEOUT_BOOST_STEP,
+    int_to_string,
+    nullptr, nullptr, nullptr,
+    NUMERIC_FONT1, MAIN_MENU_FONT2,
+    u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, 10
+  );
+  hslide->on_escape = mui_event_t::prevPage;
+  // add num slider to page
+  addMuippItem(hslide, page);
+  pageAutoSelect(page, idx);
 
   // start menu from root page
   menuStart(root_page);
@@ -935,7 +978,7 @@ void ViSet_TimeoutsSetup::_buildMenu(){
 // *****************************
 // *** MUI entities
 
-std::string numeric_to_string(int32_t v){
+std::string int_to_string(int32_t v){
   std::ostringstream oss;
   //oss << std::setprecision(1) << number;
   oss << v;

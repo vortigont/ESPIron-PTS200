@@ -29,7 +29,7 @@ class IronController {
   };
 
 public:
-  Timeouts _timeout;
+  IronTimeouts _timeout;
   Temperatures _temp;
   TickStamps _xTicks;
 
@@ -75,13 +75,13 @@ private:
    * @brief save current timeout values to NVS
    * 
    */
-  void _saveTimeouts(){ nvs_blob_write(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(Timeouts)); };
+  void _saveTimeouts(){ nvs_blob_write(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(IronTimeouts)); };
 
   /**
    * @brief save current temperature values to NVS
    * 
    */
-  void _saveTemp(){ nvs_blob_write(T_IRON, T_temperatures, static_cast<void*>(&_timeout), sizeof(Timeouts)); };
+  void _saveTemp(){ nvs_blob_write(T_IRON, T_temperatures, static_cast<void*>(&_timeout), sizeof(IronTimeouts)); };
 
 public:
   ~IronController();
