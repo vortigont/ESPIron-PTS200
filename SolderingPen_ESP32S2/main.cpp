@@ -142,14 +142,16 @@ void setup() {
   Wire.begin();
   Wire.setClock(100000);  // 400000
 
+#ifndef DEVELOP_MODE
   // initialize heater
-  //heater.init();
+  heater.init();
 
   // initialize acceleration sensor
-  //accel.init();
+  accel.init();
 
   // init voltage sensor
-  //vin.init();
+  vin.init();
+#endif  //DEVELOP_MODE
 
   // initialize HID (buttons controls and navigation, screen)
   LOGI(T_IRON, println, "Init HID");
