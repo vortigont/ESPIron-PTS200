@@ -10,6 +10,7 @@
     (at your option) any later version.
 */
 #pragma once
+#include <mutex>
 #include "common.hpp"
 #include "evtloop.hpp"
 #include "espasyncbutton.hpp"
@@ -38,10 +39,10 @@ enum class viset_evt_t {
 class VisualSet {
 
   // action button event handler
-  esp_event_handler_instance_t _evt_btn_handler = nullptr;
+  esp_event_handler_instance_t _evt_btn_handler{nullptr};
 
   // encoder event handler
-  esp_event_handler_instance_t _evt_enc_handler = nullptr;
+  esp_event_handler_instance_t _evt_enc_handler{nullptr};
 
   // event dispatcher
   static void _event_picker(void* arg, esp_event_base_t base, int32_t id, void* event_data);
@@ -93,6 +94,9 @@ class IronHID {
   // screen redraw timer
   TimerHandle_t _tmr_display = nullptr;
 
+  // ViSet mutex
+  std::mutex _mtx;
+
   // event handler
   esp_event_handler_instance_t _evt_viset_handler = nullptr;
 
@@ -110,6 +114,8 @@ class IronHID {
   void _init_screen();
 
   void _viset_spawn(viset_evt_t v);
+
+  void _viset_render();
 
 public:
   // c-tor
@@ -192,7 +198,7 @@ public:
  * menu functions must be implemented in derived classes
  * 
  */
-class MuiMenu : public VisualSet, public MuiPlusPlus {
+class MuiMenu : public MuiPlusPlus, public VisualSet {
 
 protected:
   // where to return to if this object gets quit event from MuiPlusPlus
@@ -293,6 +299,13 @@ public:
 
 // **************************
 // Helper functions
+
+/**
+ * @brief will  create a string from provided numeric
+ * 
+ * @param v 
+ * @return std::string 
+ */
 std::string numeric_to_string(int32_t v);
 
 

@@ -17,12 +17,16 @@
 // 12x16 wrong? small gothic font
 #define MAIN_MENU_FONT1     u8g2_font_glasstown_nbp_t_all
 // 10x14 OK!
-#define MAIN_MENU_FONT2     u8g2_font_smart_patrol_nbp_tr
-// 10x14 OK!
+#define MAIN_MENU_FONT2     u8g2_font_bauhaus2015_tr    //  u8g2_font_smart_patrol_nbp_tr
+// 10x14 OK! thin, quite readable
 #define MAIN_MENU_FONT3     u8g2_font_unifont_t_cyrillic
-// 11x15
+// 11x15    nice bold font
 #define PAGE_TITLE_FONT     u8g2_font_bauhaus2015_tr
 
+// 12x16 wrong? small gothic font
+#define PAGE_TITLE_FONT_SMALL   u8g2_font_glasstown_nbp_t_all
+
+// large numeric font for value setup
 #define NUMERIC_FONT1       u8g2_font_profont29_tn
 
 
@@ -32,11 +36,12 @@
 //#define MAIN_MENU_FONT3     u8g2_font_mercutio_sc_nbp_t_all
 
 #define MAIN_MENU_X_OFFSET  10
-#define MAIN_MENU_Y_OFFSET  12
-#define MAIN_MENU_Y_SHIFT   18
+#define MAIN_MENU_Y_OFFSET  15
+#define MAIN_MENU_Y_SHIFT   16
+#define MAIN_MENU_ROWS      3
 
 #define PAGE_BACK_BTN_X_OFFSET  100
-#define PAGE_BACK_BTN_Y_OFFSET  50
+#define PAGE_BACK_BTN_Y_OFFSET  55
 
 #define NUMBERSLIDE_X_OFFSET    10
 
@@ -80,9 +85,9 @@ static constexpr const char* T_SaveLast_box = "use last temp.";
 static constexpr const char* T_SaveLast_hint = "instead of default one";
 
 // Timeouts settings menu
-static constexpr const char* T_TimeStandby = "Standby timeout";
+static constexpr const char* T_TimeStandby = "Standby time";
 static constexpr const char* T_TimeIdle = "Idle timeout";
-static constexpr const char* T_TimeSuspend = "Suspend timeout";
+static constexpr const char* T_TimeSuspend = "Suspend time";
 static constexpr const char* T_TimeBoost = "Boost timeout";
 
 

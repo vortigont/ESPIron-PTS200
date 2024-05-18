@@ -49,3 +49,8 @@ enum dict_index {
     D_Temp_SaveLastWrkDescr,
     DICT___SIZE
 };
+
+
+// put common international unicode strings here
+
+static constexpr const char* T_CelsiusChar = "°C";

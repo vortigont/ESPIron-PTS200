@@ -68,15 +68,15 @@
 #define TIPNAME           "PTS  " // default tip name
 
 // Default timeout values, in milliseconds
-#define TIMEOUT_STANDBY         60000       // standby time, when heater lowers it's temperature
+#define TIMEOUT_STANDBY         60000       // standby time, when heater lowers it's temperature down to standy temp.
 #define TIMEOUT_STANDBY_MIN     30          // sec
 #define TIMEOUT_STANDBY_MAX     180         // sec
-#define TIMEOUT_STANDBY_STEP    30          // sec
+#define TIMEOUT_STANDBY_STEP    15          // sec
 #define TIMEOUT_IDLE            300000      // idle mode timeout, when Iron switches off the heater after a certain period of inactivity, ms
 #define TIMEOUT_IDLE_MIN        3           // min
 #define TIMEOUT_IDLE_MAX        15          // min
 #define TIMEOUT_IDLE_STEP       1           // min
-#define TIMEOUT_SUSPEND         1200000     // suspend timeout
+#define TIMEOUT_SUSPEND         1200000     // suspend timeout, after this time Iron will go suspend mode, disabling screen and all sensors
 #define TIMEOUT_SUSPEND_MIN     15          // min
 #define TIMEOUT_SUSPEND_MAX     120         // min
 #define TIMEOUT_SUSPEND_STEP    15          // min

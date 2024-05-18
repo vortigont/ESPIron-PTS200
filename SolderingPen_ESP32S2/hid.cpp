@@ -93,7 +93,7 @@ void IronHID::_init_screen(){
                               pdMS_TO_TICKS(TIMER_DISPLAY_REFRESH),
                               pdTRUE,
                               static_cast<void*>(this),
-                              [](TimerHandle_t h) { static_cast<IronHID*>(pvTimerGetTimerID(h))->viset->drawScreen(); }
+                              [](TimerHandle_t h) { static_cast<IronHID*>(pvTimerGetTimerID(h))->_viset_render(); }
                             );
     if (_tmr_display)
       xTimerStart( _tmr_display, portMAX_DELAY );
@@ -112,6 +112,7 @@ void IronHID::_init_screen(){
 void IronHID::switchViSet(viset_evt_t v){
   // check if return to prev screen has been requested
   if (v == viset_evt_t::goBack){
+    //return _viset_spawn(viset_evt_t::vsMainScreen);
     if (_vistack.size()){
       _cur_viset = _vistack.back();
       _vistack.pop_back();
@@ -135,6 +136,9 @@ void IronHID::switchViSet(viset_evt_t v){
 
 void IronHID::_viset_spawn(viset_evt_t v){
   LOGI(T_HID, printf, "switch ViSet:%u\n", e2int(v));
+  // obtain mutex lock while switching the object to prevent concurent operations from other threads
+  std::lock_guard<std::mutex> mylock(_mtx);
+
   switch(v){
     case viset_evt_t::vsMainScreen :
       viset = std::make_unique<ViSet_MainScreen>(_btn, _encdr);
@@ -167,6 +171,14 @@ void IronHID::init(){
   _encdr.begin();
 }
 
+void IronHID::_viset_render(){
+  std::unique_lock<std::mutex> lock(_mtx, std::defer_lock);
+  // try to obtain mutex lock, if mutex is not available then simply skip this run and return later
+  if (!lock.try_lock())
+    return;
+
+  viset->drawScreen();
+}
 
 // ***** VisualSet - Generic *****
 VisualSet::VisualSet(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : btn(button), encdr(encoder) {
@@ -188,6 +200,7 @@ VisualSet::VisualSet(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &en
 }
 
 VisualSet::~VisualSet(){
+  LOGD(T_HID, println, "~VisualSet d-tor");
   // unsubscribe from an event bus
   if (_evt_btn_handler){
     esp_event_handler_instance_unregister_with(evt::get_hndlr(), EBTN_EVENTS, ESP_EVENT_ANY_ID, _evt_btn_handler);
@@ -197,7 +210,6 @@ VisualSet::~VisualSet(){
     esp_event_handler_instance_unregister_with(evt::get_hndlr(), EBTN_ENC_EVENTS, ESP_EVENT_ANY_ID, _evt_enc_handler);
     _evt_enc_handler = nullptr;
   }
-
 }
 
 void VisualSet::_event_picker(void* arg, esp_event_base_t base, int32_t id, void* data){
@@ -476,6 +488,7 @@ MuiMenu::MuiMenu(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encode
 
 // actions for middle button in main Configuration menu
 void MuiMenu::_evt_button(ESPButton::event_t e, const EventMsg* m){
+
   LOGD(T_HID, printf, "_evt_button:%u, cnt:%d\n", e2int(e), m->cntr);
   switch(e){
     // Use click event to send 'enter/ok' to MUI menu
@@ -554,10 +567,8 @@ void ViSet_MainMenu::_buildMenu(){
 
   // generate idx for "Page title" item
   muiItemId page_title_id = nextIndex();
-  // create "Page title" item
-  MuiItem_pt p = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, page_title_id, MAIN_MENU_FONT1 );
-  // add item to menu and bind it to "Main Settings" page
-  addMuippItem(std::move(p), root_page);
+  // create "Page title" item, add it to menu and bind to "Main Settings" page
+  addMuippItem(new MuiItem_U8g2_PageTitle (u8g2, page_title_id, PAGE_TITLE_FONT ), root_page);
 
   // bind  "Page title" item with "Settings->Timers" page
   addItemToPage(page_title_id, page_set_time);
@@ -568,22 +579,13 @@ void ViSet_MainMenu::_buildMenu(){
   // bind  "Page title" item with "Settings->Info" page
   addItemToPage(page_title_id, page_set_info);
 
-/*
- // checkboxes
-  MuiItem_U8g2_CheckBox *box = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), "Some box", true, nullptr, MAINSCREEN_FONT, 0, 25);
-  MuiItem_U8g2_CheckBox *box2 = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), "Some box2", false, nullptr, MAINSCREEN_FONT, 0, 40);
-  addMuippItem(box, root_page);
-  addMuippItem(box2, root_page);
-*/
-
 
   // generate idx for "Back Button" item
   muiItemId bbuton_id = nextIndex();
-  // create "Back Button" item
-  MuiItem_pt bb = std::make_shared< MuiItem_U8g2_BackButton > (u8g2, bbuton_id, dictionary[D_return], MAIN_MENU_FONT1, PAGE_BACK_BTN_X_OFFSET, PAGE_BACK_BTN_Y_OFFSET);
-
-  // add item to menu and bind it to "Settings->Timers" page
-  addMuippItem(std::move(bb), page_set_time);
+  // create "Back Button" item, bind it to "Settings->Timers" page
+  addMuippItem( new MuiItem_U8g2_BackButton (u8g2, bbuton_id, dictionary[D_return], MAIN_MENU_FONT1, PAGE_BACK_BTN_X_OFFSET, PAGE_BACK_BTN_Y_OFFSET),
+    page_set_time
+  );
 
   // bind  "Back Button" item with "Settings->Tip" page
   addItemToPage(bbuton_id, page_set_tip);
@@ -605,13 +607,13 @@ void ViSet_MainMenu::_buildMenu(){
     MAIN_MENU_FONT2, MAIN_MENU_FONT2
   );
 
-  // set dynamic list will act as page selector
-  //menu->listopts.page_selector = true;
+  // last item in the menu acts as "back" button
   menu->listopts.back_on_last = true;
-  menu->on_escape = mui_event_t::quitMenu;                          // quit menu on escape
+  // "back" event should be replaced with "Quit menu"
+  menu->on_escape = mui_event_t::quitMenu;
   // move menu object into MuiPP page
   addMuippItem(menu, root_page);
-  // root_page
+  // Assign menu as autoselecting item
   pageAutoSelect(root_page, scroll_list_id);
 
   // start menu from page mainmenu
@@ -628,7 +630,7 @@ void ViSet_MainMenu::_submenu_selector(size_t index){
     case 1 :  // timers settings
       EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMenuTimers));
       break;
-    default:
+    default:  // for unknown items quit to main screen
       EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMainScreen));
   }
 }
@@ -638,11 +640,12 @@ void ViSet_MainMenu::_submenu_selector(size_t index){
 //  ***   Temperature Control Menu     ***
 
 ViSet_TemperatureSetup::ViSet_TemperatureSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : MuiMenu(button, encoder){
+  LOGD(T_HID, println, "Build temp menu");
   // go back to prev viset on exit
   parentvs = viset_evt_t::goBack;
   Temperatures t;
   // load temperature values from NVS
-  nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(decltype(t)));
+  nvs_blob_read(T_IRON, T_temperatures, &t, sizeof(decltype(t)));
 
   _temp.at(0) = t.deflt;
   _temp.at(1) = t.standby;
@@ -652,15 +655,15 @@ ViSet_TemperatureSetup::ViSet_TemperatureSetup(GPIOButton<ESPEventPolicy> &butto
 }
 
 ViSet_TemperatureSetup::~ViSet_TemperatureSetup(){
-  //LOGD(T_HID, println, "save temp settings");
+  LOGD(T_HID, println, "d-tor TemperatureSetup");
   // save temp settings to NVS
   Temperatures t;
-  nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&t), sizeof(decltype(t)));
+  nvs_blob_read(T_IRON, T_temperatures, &t, sizeof(decltype(t)));
   t.deflt   =  _temp.at(0);
   t.standby =  _temp.at(1);
   t.boost   =  _temp.at(2);
   t.savewrk =  save_work;
-  nvs_blob_write(T_IRON, T_temperatures, static_cast<void*>(&t), sizeof(decltype(t)));
+  nvs_blob_write(T_IRON, T_temperatures, &t, sizeof(decltype(t)));
   // send command to reload temp settings
   EVT_POST(IRON_SET_EVT, e2int(iron_t::reloadTemp));
 }
@@ -685,25 +688,22 @@ void ViSet_TemperatureSetup::_buildMenu(){
     TEMP_BOOST_STEP
   };
 
-  // create page "Settings->Temperature"
+  // create root page "Settings->Temperature"
   muiItemId root_page = makePage(menu_MainConfiguration.at(0));
 
-  // generate idx for "Page title" item
-  //muiItemId page_title_menu = nextIndex();
-  // create "Page title" item
-  MuiItem_pt p = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, nextIndex(), MAIN_MENU_FONT1 );
-  // add item to menu and bind it to "Main Settings" page
-  addMuippItem(std::move(p), root_page);
+  // create "Page title" item and assign it to root page
+  addMuippItem(new MuiItem_U8g2_PageTitle (u8g2, nextIndex(), PAGE_TITLE_FONT_SMALL ),  root_page );
+
 
   // create and add to main page a list with settings selection options
   muiItemId scroll_list_id = nextIndex();
 
-  // Temperature menu dynamic scroll list
-  auto list = new MuiItem_U8g2_DynamicScrollList(u8g2, scroll_list_id,
+  // Temperature menu options dynamic scroll list
+  auto list = std::make_shared< MuiItem_U8g2_DynamicScrollList>(u8g2, scroll_list_id,
     [](size_t index){ /* Serial.printf("idx:%u\n", index); */ return menu_TemperatureOpts.at(index); },   // this lambda will feed localized strings to the MuiItem list builder class
     [](){ return menu_TemperatureOpts.size(); },
     nullptr,                                                        // action callback
-    MAIN_MENU_Y_SHIFT, 3,                                           // offset for each line of text and total number of lines in menu
+    MAIN_MENU_Y_SHIFT, MAIN_MENU_ROWS,                              // offset for each line of text and total number of lines in menu
     MAIN_MENU_X_OFFSET, MAIN_MENU_Y_OFFSET,                         // x,y cursor
     MAIN_MENU_FONT3, MAIN_MENU_FONT3
   );
@@ -714,14 +714,13 @@ void ViSet_TemperatureSetup::_buildMenu(){
   list->on_escape = mui_event_t::quitMenu;                          // this is the only active element on a page, so I quit on escape
   // move menu object into MuiPP page
   addMuippItem(list, root_page);
+  // this is the only active Item on a page, so outselect it
   pageAutoSelect(root_page, scroll_list_id);
 
 
-  // create "Page title" item
+  // create "Page title" item, I'll add it to other pages later on
   muiItemId title2_id = nextIndex();
-  MuiItem_pt title2 = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, title2_id, PAGE_TITLE_FONT);
-  // add item to menu, I'll add it to other pages later on
-  addMuippItem(std::move(title2));
+  addMuippItem( std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, title2_id, PAGE_TITLE_FONT) );
 
   // autogenerate items for each temperature setting value
   for (auto i = 0; i != _temp.size(); ++i){
@@ -731,9 +730,9 @@ void ViSet_TemperatureSetup::_buildMenu(){
     addItemToPage(title2_id, page);
     // create num slider Mui Item
     muiItemId idx = nextIndex();
-    auto hslide = new MuiItem_U8g2_NumberHSlide<int32_t>(
+    auto hslide = std::make_shared< MuiItem_U8g2_NumberHSlide<int32_t> >(
       u8g2, idx,
-      NULL,   // label
+      nullptr,   // label
       _temp.at(i),
       def_temp_min[i], def_temp_max[i], def_temp_step[i],
       numeric_to_string,
@@ -745,7 +744,7 @@ void ViSet_TemperatureSetup::_buildMenu(){
     hslide->on_escape = mui_event_t::prevPage;
     // add num slider to page
     addMuippItem(hslide, page);
-    // autoselect this item
+    // make this item autoselected on this page
     pageAutoSelect(page, idx);
 
 /*
@@ -758,25 +757,26 @@ void ViSet_TemperatureSetup::_buildMenu(){
 */
   }
 
-
   // ***
-  // page "Save Work temp" checkbox
-  muiItemId page = makePage(menu_TemperatureOpts.back(), root_page);
-  MuiItem_U8g2_CheckBox *box = new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), dictionary[D_SaveLast_box], save_work, [this](size_t v){ save_work = v; }, MAINSCREEN_FONT, 0, 25);
-  addMuippItem(box, page);
+  // page "Save last Work temp" checkbox
+  muiItemId page = makePage(menu_TemperatureOpts.at(menu_TemperatureOpts.size()-2), root_page);
+  // add page Title
+  addItemToPage(title2_id, page);
+  // create checkbox item
+  addMuippItem(
+    new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), dictionary[D_SaveLast_box], save_work, [this](size_t v){ save_work = v; }, MAINSCREEN_FONT, 0, 35),
+    page);
 
-  // text hint
-  MuiItem_U8g2_StaticText *txt = new MuiItem_U8g2_StaticText(u8g2, nextIndex(), dictionary[D_SaveLast_hint], MAIN_MENU_FONT1, 0, 25);
-  addMuippItem(txt, page);
+  // create text hint
+  addMuippItem(new MuiItem_U8g2_StaticText(u8g2, nextIndex(), dictionary[D_SaveLast_hint], MAIN_MENU_FONT1, 0, 45),
+    page);
 
   // create "Back Button" item
-  auto bb = new MuiItem_U8g2_BackButton (u8g2, nextIndex(), dictionary[D_return], MAIN_MENU_FONT1, PAGE_BACK_BTN_X_OFFSET, PAGE_BACK_BTN_Y_OFFSET);
-
-  // add item and bind it to "save work temp" page
-  addMuippItem(bb, page);
+  addMuippItem(new MuiItem_U8g2_BackButton(u8g2, nextIndex(), dictionary[D_return], MAIN_MENU_FONT1, PAGE_BACK_BTN_X_OFFSET, PAGE_BACK_BTN_Y_OFFSET),
+    page);
 
   // start menu from root page
-  menuStart(root_page);
+  menuStart(root_page); 
 }
 
 
@@ -789,41 +789,27 @@ ViSet_TimeoutsSetup::ViSet_TimeoutsSetup(GPIOButton<ESPEventPolicy> &button, Pse
   parentvs = viset_evt_t::goBack;
   IronTimeouts t;
   // load temperature values from NVS
-  nvs_blob_read(T_IRON, T_timeouts, static_cast<void*>(&t), sizeof(decltype(t)));
-  // this is ugly, but I do not want to work with ms in menu
-/*
-  _timeout.idle    /= 60000;  // min
-  _timeout.standby /= 1000;   // sec   
-  _timeout.suspend /= 60000;  // min
-  _timeout.boost   /= 1000;   // sec
-*/
-//
-  _timeout.at(0) = t.standby / 60000;   // min
-  _timeout.at(1) = t.idle / 1000;       // sec 
+  nvs_blob_read(T_IRON, T_timeouts, &t, sizeof(decltype(t)));
+  // I do not want work with ms in menu, so let's convert it to sec/min
+
+  _timeout.at(0) = t.standby / 1000;    // sec
+  _timeout.at(1) = t.idle / 60000;      // min
   _timeout.at(2) = t.suspend / 60000;   // min
   _timeout.at(3) = t.boost / 1000;      // sec
-//
+
   _buildMenu();
 }
 
 ViSet_TimeoutsSetup::~ViSet_TimeoutsSetup(){
-/*
-  _timeout.idle    *= 60000;
-  _timeout.standby *= 1000;
-  _timeout.suspend *= 60000;
-  _timeout.boost   *= 1000;
-*/
   IronTimeouts t;
-//
-  t.standby = _timeout.at(0) * 60000;
-  t.idle    = _timeout.at(1) * 1000;
+  t.standby = _timeout.at(0) * 1000;
+  t.idle    = _timeout.at(1) * 60000;
   t.suspend = _timeout.at(2) * 60000;
   t.boost   = _timeout.at(3) * 1000;
-//
 
-  // save temp settings to NVS
-  nvs_blob_write(T_IRON, T_timeouts, static_cast<void*>(&t), sizeof(decltype(t)));
-  // send command to reload temp settings
+  // save settings to NVS
+  nvs_blob_write(T_IRON, T_timeouts, &t, sizeof(decltype(t)));
+  // send command to reload time settings
   EVT_POST(IRON_SET_EVT, e2int(iron_t::reloadTimeouts));
 }
 
@@ -851,8 +837,8 @@ void ViSet_TimeoutsSetup::_buildMenu(){
   };
 
   constexpr std::array<const char*, 4> def_timeouts_label = {
-    dictionary[D_min],
     dictionary[D_sec],
+    dictionary[D_min],
     dictionary[D_min],
     dictionary[D_sec]
   };
@@ -861,10 +847,8 @@ void ViSet_TimeoutsSetup::_buildMenu(){
   // create page "Settings->Timeouts"
   muiItemId root_page = makePage(menu_MainConfiguration.at(1));
 
-  // create "Page title" item
-  MuiItem_pt p = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, nextIndex(), MAIN_MENU_FONT1 );
-  // add item to menu and bind it to root page
-  addMuippItem(std::move(p), root_page);
+  // create "Page title" item, bind it to root page
+  addMuippItem(new MuiItem_U8g2_PageTitle(u8g2, nextIndex(), MAIN_MENU_FONT1 ), root_page);
 
   // create and add to main page a list with settings selection options
   muiItemId scroll_list_id = nextIndex();
@@ -876,7 +860,7 @@ void ViSet_TimeoutsSetup::_buildMenu(){
     nullptr,                                                        // action callback
     MAIN_MENU_Y_SHIFT, 3,                                           // offset for each line of text and total number of lines in menu
     MAIN_MENU_X_OFFSET, MAIN_MENU_Y_OFFSET,                         // x,y cursor
-    MAIN_MENU_FONT2, MAIN_MENU_FONT2
+    MAIN_MENU_FONT3, MAIN_MENU_FONT3
   );
 
   // dynamic list will act as page selector
@@ -888,11 +872,9 @@ void ViSet_TimeoutsSetup::_buildMenu(){
   pageAutoSelect(root_page, scroll_list_id);                        // the only item on page must be autoselected
 
 
-  // create "Page title" item
+  // create "Page title" item for sub pages (I will use another font there)
   muiItemId title2_id = nextIndex();
-  MuiItem_pt title2 = std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, title2_id, PAGE_TITLE_FONT);
-  // add item to menu, I'll add it to other pages later on
-  addMuippItem(std::move(title2));
+  addMuippItem( std::make_shared< MuiItem_U8g2_PageTitle > (u8g2, title2_id, PAGE_TITLE_FONT) );
 
   // autogenerate items for each timeout setting value
   for (auto i = 0; i != _timeout.size(); ++i){
@@ -921,8 +903,8 @@ void ViSet_TimeoutsSetup::_buildMenu(){
 
     // value label hint position in the bottom center of screen
     auto txt = new MuiItem_U8g2_StaticText(u8g2, nextIndex(), def_timeouts_label[i], PAGE_TITLE_FONT, u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight());
-    txt->h_align = text_align_t::bottom;
-    txt->v_align = text_align_t::center;
+    txt->h_align = text_align_t::center;
+    txt->v_align = text_align_t::bottom;
     addMuippItem(txt, page);
   }
 
@@ -934,6 +916,7 @@ void ViSet_TimeoutsSetup::_buildMenu(){
 
 // *****************************
 // *** MUI entities
+
 
 std::string numeric_to_string(int32_t v){
   std::ostringstream oss;
@@ -947,5 +930,4 @@ std::string numeric_to_string(int32_t v){
 
 // *****************************
 // *** An instance of HID object
-
 IronHID hid;

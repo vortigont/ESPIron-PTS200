@@ -7,17 +7,15 @@
 #include "main.h"
 #include "log.h"
 
-#include <QC3Control.h>
 #ifdef CONFIG_TINYUSB_MSC_ENABLED
+#include <QC3Control.h>
 #include "FirmwareMSC.h"
 #include "USB.h"
-#endif
-
-
-#ifdef CONFIG_TINYUSB_MSC_ENABLED
 QC3Control QC(QC_DP_PIN, QC_DM_PIN);
 FirmwareMSC MSC_Update;
 #endif
+
+#ifndef DEVELOP_MODE
 // Iron tip heater object
 TipHeater heater(HEATER_PIN, HEATER_CHANNEL, HEATER_INVERT);
 
@@ -25,10 +23,10 @@ TipHeater heater(HEATER_PIN, HEATER_CHANNEL, HEATER_INVERT);
 GyroSensor accel;
 // input voltage sensor
 VinSensor vin;
+#endif  // DEVELOP_MODE
 
 // Default value can be changed by user and stored in EEPROM
 // 用户可以更改并存储在EEPROM中的默认值
-uint8_t MainScrType = MAINSCREEN;
 bool beepEnable = BEEP_ENABLE;
 bool QCEnable = QC_ENABLE;
 
@@ -39,26 +37,6 @@ uint16_t CalTemp[TIPMAX][4] = {TEMP200, TEMP280, TEMP360, TEMPCHP};
 char TipName[TIPMAX][TIPNAMELENGTH] = {TIPNAME};
 uint8_t CurrentTip = 0;
 uint8_t NumberOfTips = 1;
-
-// Variables for pin change interrupt 引脚更改中断的变量
-// those a flags for press and hold for buttons
-volatile uint8_t a0, b0, c0;
-volatile bool ab0;
-// button press counters
-volatile int count, countMin, countMax, countStep;
-
-// Timing variables 时间变量
-uint32_t buttonmillis;
-
-
-// Buffer for drawUTF8
-char F_Buffer[20];
-
-// Language
-uint8_t language = 0;
-
-// Hand Side
-uint8_t hand_side = 0;
 
 // MSC Firmware
 bool MSC_Updating_Flag = false;
@@ -87,7 +65,8 @@ void setup() {
   // let ACM device intitialize to catch early log output
   delay(4000);
 #endif
-  LOGI(T_IRON, printf, "ESPIron PTS200 firmware version: %s\n", FW_VERSION);
+  Serial.printf( "ESPIron PTS200 firmware version: %s\n", FW_VERSION);
+  //LOGI(T_IRON, printf, "ESPIron PTS200 firmware version: %s\n", FW_VERSION);
 
   // Start event loop task
   evt::start();
