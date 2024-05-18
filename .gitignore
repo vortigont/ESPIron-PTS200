@@ -7,6 +7,4 @@
 .lnk
 temp/
 platformio_*.ini
-SolderingPen_ESP32S2/build
-SolderingPen_ESP32S2/.idea
-SolderingPen_ESP32S2/config_*.h
+ESPIron/config_*.h
