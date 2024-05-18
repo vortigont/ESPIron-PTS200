@@ -39,7 +39,7 @@ U8G2_SH1107_64X128_F_HW_I2C u8g2(U8G2_R1, SH1107_RST_PIN);
 #error Wrong OLED controller type!
 #endif
 
-#define TIMER_DISPLAY_REFRESH     10    // 10 fps max   (screen redraw is ~35 ms)
+#define TIMER_DISPLAY_REFRESH     100   // 10 fps max   (screen redraw is ~35 ms)
 
 #define X_OFFSET_TIP_TEMP         50
 #define Y_OFFSET_TIP_TEMP         18

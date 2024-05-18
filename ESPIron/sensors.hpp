@@ -22,9 +22,9 @@ class GyroSensor {
 
   SPARKFUN_LIS2DH12 accel;
   // temperature polling timer
-  TimerHandle_t _tmr_temp = nullptr;
+  TimerHandle_t _tmr_temp{nullptr};
   // accell sensor polling timer
-  TimerHandle_t _tmr_accel = nullptr;
+  TimerHandle_t _tmr_accel{nullptr};
 
   esp_event_handler_instance_t _evt_set_handler = nullptr;
 
@@ -107,7 +107,7 @@ public:
  */
 class VinSensor {
   // RTOS polling timer
-  TimerHandle_t _tmr_runner = nullptr;
+  TimerHandle_t _tmr_runner{nullptr};
 
   //esp_event_handler_instance_t _evt_set_handler = nullptr;
 

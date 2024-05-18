@@ -30,16 +30,11 @@ VinSensor vin;
 bool beepEnable = BEEP_ENABLE;
 bool QCEnable = QC_ENABLE;
 
-
-// Default value for T12
-// T12的默认值
-uint16_t CalTemp[TIPMAX][4] = {TEMP200, TEMP280, TEMP360, TEMPCHP};
-char TipName[TIPMAX][TIPNAMELENGTH] = {TIPNAME};
-uint8_t CurrentTip = 0;
-uint8_t NumberOfTips = 1;
-
 // MSC Firmware
 bool MSC_Updating_Flag = false;
+
+
+
 
 // *** Arduino setup ***
 void setup() {
@@ -63,10 +58,9 @@ void setup() {
 
 #if PTS200_DEBUG_LEVEL > 3
   // let ACM device intitialize to catch early log output
-  delay(4000);
+  delay(3000);
 #endif
-  Serial.printf( "ESPIron PTS200 firmware version: %s\n", FW_VERSION);
-  //LOGI(T_IRON, printf, "ESPIron PTS200 firmware version: %s\n", FW_VERSION);
+  LOGI(T_IRON, printf, "ESPIron PTS200 firmware version: %s\n", FW_VERSION);
 
   // Start event loop task
   evt::start();
@@ -111,11 +105,11 @@ void setup() {
   }
 #endif
 
-  // Initialize IronController
+  // Initialize Iron Controller
   espIron.init();
 
   // request configured voltage via PD trigger
-  //PD_Update();
+  PD_Update();
 
   // I2C bus (for display)
   Wire.begin();
@@ -158,48 +152,37 @@ void beep() {
 }
 
 
-int32_t variance(int16_t a[]) {
-  // Compute mean (average of elements)计算平均值(元素的平均值)
-  int32_t sum = 0;
-
-  for (int i = 0; i < 32; i++) sum += a[i];
-  int16_t mean = (int32_t)sum / 32;
-  // Compute sum squared differences with mean.计算和平方差的平均值
-  int32_t sqDiff = 0;
-  for (int i = 0; i < 32; i++) sqDiff += (a[i] - mean) * (a[i] - mean);
-  return (int32_t)sqDiff / 32;
-}
-
 void PD_Update() {
   // fake readings for now
   int VoltageValue = 20;
   switch (VoltageValue) {
     // 9 volts
-    case 0: {
+    case 9: {
       digitalWrite(PD_CFG_0, LOW);
       digitalWrite(PD_CFG_1, LOW);
       digitalWrite(PD_CFG_2, LOW);
     } break;
     // 12 volts
-    case 1: {
+    case 12: {
       digitalWrite(PD_CFG_0, LOW);
       digitalWrite(PD_CFG_1, LOW);
       digitalWrite(PD_CFG_2, HIGH);
     } break;
     // 15 volts
-    case 2: {
+    case 15: {
       digitalWrite(PD_CFG_0, LOW);
       digitalWrite(PD_CFG_1, HIGH);
       digitalWrite(PD_CFG_2, HIGH);
     } break;
     // 20 volts
-    case 3:
-    case 4: {
+    case 20: {
       digitalWrite(PD_CFG_0, LOW);
       digitalWrite(PD_CFG_1, HIGH);
       digitalWrite(PD_CFG_2, LOW);
     } break;
-    default:;
+    default:
+      // start PD trigger with default 5 volts
+      digitalWrite(PD_CFG_0, HIGH);
   }
 /*
   if (VoltageValue == 3) {

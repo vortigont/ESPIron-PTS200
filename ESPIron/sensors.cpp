@@ -4,11 +4,11 @@
 #include "log.h"
 
 #define LIS
-#define ACCEL_MOTION_FACTOR 25000
+#define ACCEL_MOTION_FACTOR             25000
 #define ACCEL_MOTION_POLL_PERIOD        50      // ms
-#define ACCEL_TEMPERATURE_POLL_PERIOD   1000    // ms
+#define ACCEL_TEMPERATURE_POLL_PERIOD   3000    // ms
 
-#define VIN_ADC_POLL_PERIOD             1000    // ms
+#define VIN_ADC_POLL_PERIOD             1500    // ms
 
 GyroSensor::~GyroSensor(){
   // unsubscribe from event bus
@@ -28,6 +28,7 @@ void GyroSensor::init(){
     LOGE(T_GYRO, println, "Accelerometer not detected.");
     return;
   }
+  LOGI(T_Sensor, println, "Init Accelerometer sensor");
 
   // start temperature polling
   if (!_tmr_temp){
@@ -37,8 +38,8 @@ void GyroSensor::init(){
                               static_cast<void*>(this),
                               [](TimerHandle_t h) { static_cast<GyroSensor*>(pvTimerGetTimerID(h))->_temperature_poll(); }
                             );
-    if (_tmr_temp)
-      xTimerStart( _tmr_temp, pdMS_TO_TICKS(10) );
+    //if (_tmr_temp)
+    //  xTimerStart( _tmr_temp, portMAX_DELAY );
   }
 
   // start accl polling
@@ -49,8 +50,9 @@ void GyroSensor::init(){
                               static_cast<void*>(this),
                               [](TimerHandle_t h) { static_cast<GyroSensor*>(pvTimerGetTimerID(h))->_accel_poll(); }
                             );
-    // keep it disabled on begin, TODO: realct on events from mode changes
-    xTimerStart( _tmr_accel, pdMS_TO_TICKS(10) );
+    // TODO: realct on events from mode changes
+    //if (_tmr_accel)
+    //  xTimerStart( _tmr_accel, portMAX_DELAY );
   }
 
   // subscribe to event bus
@@ -64,7 +66,9 @@ void GyroSensor::init(){
       &_evt_set_handler
     );
   }
-  
+
+  // start sensor polling
+  enable();
   // lis2dh12_block_data_update_set(&(accel.dev_ctx), PROPERTY_DISABLE);
   // accel.setScale(LIS2DH12_2g);
   // accel.setMode(LIS2DH12_HR_12bit);
@@ -186,20 +190,26 @@ void GyroSensor::enable(){
   std::unique_ptr<nvs::NVSHandle> nvs = nvs::open_nvs_handle(T_Sensor, NVS_READONLY, &err);
 
   // load configured motion threshold
-  if (err != ESP_OK) {
+  if (err == ESP_OK) {
+    _motionThreshold = WAKEUP_THRESHOLD;
     nvs->get_item(T_motionThr, _motionThreshold);
   }
 
   // start sensor polling
   if (_tmr_accel)
-    xTimerStart( _tmr_accel, pdMS_TO_TICKS(10) );
+    xTimerStart( _tmr_accel, portMAX_DELAY );
 
-  LOGD(T_GYRO, printf, "gyro enabled, thr:%u\n", _motionThreshold);
+  if (_tmr_temp)
+    xTimerStart( _tmr_temp, portMAX_DELAY );
+  LOGD(T_GYRO, printf, "accel sensor enabled, thr:%u\n", _motionThreshold);
 }
 
 void GyroSensor::disable(){
   if (_tmr_accel)
-    xTimerStop( _tmr_accel, pdMS_TO_TICKS(10) );
+    xTimerStop( _tmr_accel, portMAX_DELAY );
+
+  if (_tmr_temp)
+    xTimerStop( _tmr_temp, portMAX_DELAY );
 }
 
 void GyroSensor::_clear(){
@@ -221,6 +231,7 @@ void GyroSensor::_temperature_poll(){
 // *** VinSensor methods ***
 
 void VinSensor::init(){
+  LOGI(T_Sensor, println, "Init Voltage sensor");
   // input voltage pin ADC
   adc_vin.attach(VIN_PIN);
 
@@ -233,7 +244,11 @@ void VinSensor::init(){
                               [](TimerHandle_t h) { static_cast<VinSensor*>(pvTimerGetTimerID(h))->_runner(); }
                             );
     // start poller right away
-    xTimerStart( _tmr_runner, pdMS_TO_TICKS(10) );
+    if (_tmr_runner && xTimerStart( _tmr_runner, portMAX_DELAY ) == pdPASS){
+      LOGD(T_Sensor, println, "Enable Input voltage polling");
+    } else {
+      LOGE(T_Sensor, println, "Unable to start voltage polling");
+    }
   }
 
 /*

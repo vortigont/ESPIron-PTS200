@@ -192,7 +192,7 @@ void TipHeater::_heaterControl(){
       ledc_set_duty(LEDC_MODE, _pwm.channel, 0);
       ledc_update_duty(LEDC_MODE, _pwm.channel);
       _state = HeaterState_t::notip;
-      LOGI(T_HEAT, printf, "Iron Tip ejected, T:%d\n", t);
+      LOGI(T_HEAT, printf, "Iron Tip ejected, T:%d\n", static_cast<int32_t>(t));
       EVT_POST(SENSOR_DATA, e2int(evt::iron_t::tipEject));
       continue;
     }
