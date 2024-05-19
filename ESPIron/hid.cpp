@@ -539,7 +539,8 @@ void MuiMenu::drawScreen(){
   render();
   u8g2.sendBuffer();
   Serial.printf("en:%lu\n", millis());
-
+  // take a screenshot
+  //u8g2.writeBufferXBM(Serial);
   _rr = false;
 }
 

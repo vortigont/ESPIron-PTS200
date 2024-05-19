@@ -7,27 +7,23 @@ Firmware for [Feizer PTS200](https://www.aliexpress.com/store/1102411999) solder
 I've started this project as a fork of [Songguo PTS200](https://github.com/Eddddddddy/Songguo-PTS200) to completely rework original firmware.
 My goals is to create a well-structured firmware with a flexible design.
 
-Currently project is in it's early development stage, mostly refactoring original firmware. Additional features and UI redesign will follow.
-Work in progress code in [experimental](https://github.com/vortigont/ESPIron-PTS200/tree/ctrl) branch, no configuration UI currently.
+Currently project is in it's early development stage. Additional features and UI redesign will follow.
 
 Discussion forum [thread](https://community.alexgyver.ru/threads/proshivka-dlja-pajalnika-feizer-pts200-v2-esp32.9930/) (in russian).
 
 Telegram group [LampDevs](https://t.me/LampDevs) (Russian)
 
 WIP:
- - turn Arduino's ino file into a set of cpp and header files
- - create separate class instances for heater, sensors, etc...
  - decomposite project into independent tasks and RTOS threads
  - use full-range PWM for heater
  - enabled PID control for PWM (not optimized yet)
  - revised temperture probes scheduling
  - exclude useless tight loops
- - add tunable debugging messages
  - removed ALL blocking code, wiped arduino's `loop()` hooks, now all code is asynchronous
  - rework UI into non-blocking event based configuration system
+ - Move configuration data to NVS key/value storage
+ - Reimplemented temperature and timers configuration
 
-
-Iron [Schematics](/docs/PTS200_Schematic_2022-07-10.pdf) (probably from similar iron, some items does not match with PTS-200)
 
 ### Key controls
 | Mode | Key | Action | Function |
@@ -38,6 +34,45 @@ Iron [Schematics](/docs/PTS200_Schematic_2022-07-10.pdf) (probably from similar 
 | Idle/Working | `+`/`-` | single click | inc/decr working temperature in one step |
 | Idle/Working | `+`/`-` | double click | inc/decr working temperature in 4 steps |
 | Idle/Working | `+`/`-` | triple click | inc/decr working temperature in 6 steps |
+| Menu navigation | `middle` | short press | enter menu section, comfirm action |
+| Menu navigation | `middle` | long press | escape action, previous page, etc |
+| Menu navigation | `+`/`-` | single click | move along menu items, inc/decr action  |
+
+
+
+### Menu navigation
+
+<!-- https://stackoverflow.com/questions/37349314/is-it-possible-to-add-border-to-image-in-github-markdown -->
+Menu navigation demo capture.
+|<img src="pics/menu_demo01.png?raw=true" alt="Menu demo" />
+|-
+
+
+### Features implementation progress
+
+| Function | Status |
+|-|-|
+| standby timer | :white_check_mark: done |
+| :hourglass: idle timer | :white_check_mark: done |
+| :zzz: suspend timer | :white_check_mark: done |
+| :hotsprings: Temperature control | :white_check_mark: done |
+| :rocket: boost mode | :white_check_mark: done |
+| :floppy_disk: (optionaly) save/restore last used temperature | :white_check_mark: done |
+| Tip calibration | :x: Planned |
+| Tip profiles | :x: Planned |
+| PD configuration | :x: Planned |
+| QC Configuration | :x: Planned |
+| Power profile | :x: Planned |
+| Power budget | :x: Planned |
+| PID profiles | :x: Planned |
+| PID tuning | :x: Planned |
+
+
+
+
+#### Schematics
+Iron [Schematics](/docs/PTS200_Schematic_2022-07-10.pdf) (probably from similar iron, some items does not match with PTS-200)
+
 
 
 
@@ -68,15 +103,5 @@ Iron [Schematics](/docs/PTS200_Schematic_2022-07-10.pdf) (probably from similar 
 
 <!-- 构建方法 -->
 ## Build method
-<!-- Arduino with ESP32 环境 -->
-1. Arduino with ESP32 environment
-<!-- 安装依赖库 -->
-2. Install dependent libraries: Button2, U8g2, QC3Control, ESP32AnalogRead, PID_v1, SparkFun_LIS2DH12
-<!-- 从U8G2库中替换u8g2_fonts.c文件 -->
-3. Replace the u8g2_fonts.c file from the U8G2 library
-<!-- 在Arduino 中选择Tools- USB CDC On Boot- Enable -->
-4. In Arduino, select Tools-USB CDC On Boot-Enable
-<!-- 在Arduino 中选择Tools-Upload Mode- Internal USB -->
-5. In Arduino, select Tools-Upload Mode-Internal USB
-<!-- 点击上传 -->
-6. Click Upload
+Use [PlatformIO](https://platformio.org/) to build the project.
+Attach the iron to USB port and run `pio run -t upload` in project's directory.
