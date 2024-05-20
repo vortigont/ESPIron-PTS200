@@ -64,6 +64,11 @@ IronHID::~IronHID(){
     _evt_viset_handler = nullptr;
   }  
 
+  if (_evt_ntfy_handler){
+      esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_NOTIFY, e2int( iron_t::stateSuspend ), _evt_ntfy_handler);
+    _evt_ntfy_handler = nullptr;
+  }
+
   if (_tmr_display)
     xTimerDelete( _tmr_display, portMAX_DELAY );
 }
@@ -164,6 +169,21 @@ void IronHID::init(){
 
   // initialize screen
   _init_screen();
+
+  // subscribe to notification events
+  if (!_evt_ntfy_handler){
+    esp_event_handler_instance_register_with(
+      evt::get_hndlr(),
+      IRON_NOTIFY,
+      e2int( iron_t::stateSuspend ),    // I need only 'suspend' for now
+      // notification on suspend
+      [](void* self, esp_event_base_t base, int32_t id, void* data) { u8g2.sleepOn(); },    // suspend display
+      this,
+      &_evt_ntfy_handler
+    );
+
+  }
+
 
   // enable middle button
   _btn.enable();

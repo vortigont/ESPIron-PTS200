@@ -98,7 +98,10 @@ class IronHID {
   std::mutex _mtx;
 
   // event handler
-  esp_event_handler_instance_t _evt_viset_handler = nullptr;
+  esp_event_handler_instance_t _evt_viset_handler{nullptr};
+
+  // event handler
+  esp_event_handler_instance_t _evt_ntfy_handler{nullptr};
 
   // action button
   GPIOButton<ESPEventPolicy> _btn;
@@ -116,6 +119,9 @@ class IronHID {
   void _viset_spawn(viset_evt_t v);
 
   void _viset_render();
+
+  // process Iron notification events
+  void _notify_handler();
 
 public:
   // c-tor
