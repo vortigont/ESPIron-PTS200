@@ -15,6 +15,9 @@ QC3Control QC(QC_DP_PIN, QC_DM_PIN);
 FirmwareMSC MSC_Update;
 #endif
 
+// An instance of IronController
+IronController espIron;
+
 #ifndef DEVELOP_MODE
 // Iron tip heater object
 TipHeater heater(HEATER_PIN, HEATER_CHANNEL, HEATER_INVERT);

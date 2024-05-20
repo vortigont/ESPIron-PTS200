@@ -20,8 +20,9 @@
 #define BUTTON_ACTION     GPIO_NUM_0     // middle push-button
 #define BUTTON_INCR       GPIO_NUM_2     // incrementer “+” push-button
 #define BUTTON_DECR       GPIO_NUM_4     // decrementer “-” push-button
-#define HEATER_PIN        5     // heater MOSFET PWM control 加热器MOSFET PWM控制
+#define HEATER_PIN        GPIO_NUM_5     // heater MOSFET PWM control 加热器MOSFET PWM控制
 #define SH1107_RST_PIN    7     // display reset pin
+
 // CH224K USB PD chip pins connection
 // https://components101.com/sites/default/files/component_datasheet/WCH_CH224K_ENG.pdf
 #define PD_CFG_0          16
@@ -34,7 +35,6 @@
 // Heater PWM parameters
 #define HEATER_CHANNEL    LEDC_CHANNEL_2     // PWM channel
 #define HEATER_FREQ       200   // PWM frequency
-//#define HEATER_HIGHFREQ   1000  // PWM frequency for 20V/50% PWM mode
 #define HEATER_RES        LEDC_TIMER_8_BIT     // PWM resolution
 
 // Default temperature control value (recommended soldering temperature: 300~380°C)

@@ -26,14 +26,12 @@ class IronController {
     // last time motion was detected
     TickType_t motion;
     TickType_t boost;
+    TickType_t idle;
   };
 
-public:
   IronTimeouts _timeout;
   Temperatures _temp;
   TickStamps _xTicks;
-
-private:
 
   // current iron mode
   ironState_t _state{ironState_t::idle};
@@ -71,18 +69,6 @@ private:
   // req commands events executor
   void _evt_reqs(esp_event_base_t base, int32_t id, void* data);
 
-  /**
-   * @brief save current timeout values to NVS
-   * 
-   */
-  void _saveTimeouts(){ nvs_blob_write(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(IronTimeouts)); };
-
-  /**
-   * @brief save current temperature values to NVS
-   * 
-   */
-  void _saveTemp(){ nvs_blob_write(T_IRON, T_temperatures, static_cast<void*>(&_timeout), sizeof(IronTimeouts)); };
-
 public:
   ~IronController();
 
@@ -99,6 +85,19 @@ public:
 
   // get internal temperatures configuration
   const Temperatures& getTemperatures() const { return _temp; }
-};
 
-extern IronController espIron;
+private:
+  /**
+   * @brief save current timeout values to NVS
+   * 
+   */
+  void _saveTimeouts(){ nvs_blob_write(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(IronTimeouts)); };
+
+  /**
+   * @brief save current temperature values to NVS
+   * 
+   */
+  void _saveTemp(){ nvs_blob_write(T_IRON, T_temperatures, static_cast<void*>(&_timeout), sizeof(IronTimeouts)); };
+
+
+};
