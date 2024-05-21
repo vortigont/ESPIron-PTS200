@@ -50,10 +50,10 @@
 namespace lang_en_us {
 
 // EN US
-static constexpr const char* T_Boost        = "Boost";
+static constexpr const char* T_Boost        = "Boost";              // state display
 static constexpr const char* T_Error        = "Error";
-static constexpr const char* T_Heating      = "Heating";
-static constexpr const char* T_Idle         = "Idle";
+static constexpr const char* T_Heating      = "Heating";            // state display
+static constexpr const char* T_Idle         = "Idle";               // state display
 static constexpr const char* T_min          = "min.";               // short for 'minutes'
 static constexpr const char* T_NoTip        = "No tip!";            // state display when tip is missing
 static constexpr const char* T_sec          = "sec.";               // short for 'seconds'
@@ -90,6 +90,9 @@ static constexpr const char* T_TimeIdle = "Idle timeout";
 static constexpr const char* T_TimeSuspend = "Suspend time";
 static constexpr const char* T_TimeBoost = "Boost timeout";
 
+// Power Supply settings menu
+static constexpr const char* T_PwrPD = "PD Trigger";
+static constexpr const char* T_PwrQC = "QC Trigger";
 
 
 } // end  of namespace lang_en_us

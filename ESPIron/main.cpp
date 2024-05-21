@@ -155,46 +155,7 @@ void beep() {
 }
 
 
-void PD_Update() {
-  // fake readings for now
-  int VoltageValue = 20;
-  switch (VoltageValue) {
-    // 9 volts
-    case 9: {
-      digitalWrite(PD_CFG_0, LOW);
-      digitalWrite(PD_CFG_1, LOW);
-      digitalWrite(PD_CFG_2, LOW);
-    } break;
-    // 12 volts
-    case 12: {
-      digitalWrite(PD_CFG_0, LOW);
-      digitalWrite(PD_CFG_1, LOW);
-      digitalWrite(PD_CFG_2, HIGH);
-    } break;
-    // 15 volts
-    case 15: {
-      digitalWrite(PD_CFG_0, LOW);
-      digitalWrite(PD_CFG_1, HIGH);
-      digitalWrite(PD_CFG_2, HIGH);
-    } break;
-    // 20 volts
-    case 20: {
-      digitalWrite(PD_CFG_0, LOW);
-      digitalWrite(PD_CFG_1, HIGH);
-      digitalWrite(PD_CFG_2, LOW);
-    } break;
-    default:
-      // start PD trigger with default 5 volts
-      digitalWrite(PD_CFG_0, HIGH);
-  }
-/*
-  if (VoltageValue == 3) {
-    ledcSetup(HEATER_CHANNEL, HEATER_HIGHFREQ, HEATER_RES);
-  } else {
-    ledcSetup(HEATER_CHANNEL, HEATER_FREQ, HEATER_RES);
-  }
-*/
-}
+
 
 static void usbEventCallback(void *arg, esp_event_base_t event_base,
                              int32_t event_id, void *event_data) {

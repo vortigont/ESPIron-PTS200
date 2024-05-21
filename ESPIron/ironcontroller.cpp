@@ -10,6 +10,7 @@
     (at your option) any later version.
 */
 
+#include "config.h"
 #include "ironcontroller.hpp"
 #include "esp_sleep.h"
 #include "driver/rtc_io.h"
@@ -71,12 +72,24 @@ IronController::~IronController(){
 }
 
 void IronController::init(){
+  esp_err_t err;
+  std::unique_ptr<nvs::NVSHandle> handle = nvs::open_nvs_handle(T_IRON, NVS_READONLY, &err);
+
+  if (err == ESP_OK) {
+    handle->get_item(T_pdVolts, _voltage);
+  }
+
+  // init PD gpios
+  _pd_trigger_init();
+  _pd_trigger(_voltage);
 
   // load timeout values from NVS
   nvs_blob_read(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(IronTimeouts));
 
   // load temperature values from NVS
   nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
+
+
 
   // if we are not saving working temp, then use default one instead
   if (!_temp.savewrk)
@@ -324,3 +337,51 @@ void IronController::_evt_reqs(esp_event_base_t base, int32_t id, void* data){
   }
 }
 
+void IronController::_pd_trigger_init(){
+  gpio_config_t gpio_conf = {};
+  gpio_conf.mode = GPIO_MODE_OUTPUT;
+  gpio_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+  gpio_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  gpio_conf.pin_bit_mask = BIT64(PD_GPIO_0) | BIT64(PD_GPIO_1) | BIT64(PD_GPIO_2);
+  gpio_conf.intr_type = GPIO_INTR_DISABLE;
+  gpio_config(&gpio_conf);
+}
+
+void IronController::_pd_trigger(uint32_t voltage){
+  switch (voltage) {
+    // 9 volts
+    case 9: {
+      gpio_set_level(PD_GPIO_0, LOW);
+      gpio_set_level(PD_GPIO_1, LOW);
+      gpio_set_level(PD_GPIO_2, LOW);
+    } break;
+    // 12 volts
+    case 12: {
+      gpio_set_level(PD_GPIO_0, LOW);
+      gpio_set_level(PD_GPIO_1, LOW);
+      gpio_set_level(PD_GPIO_2, HIGH);
+    } break;
+    // 15 volts
+    case 15: {
+      gpio_set_level(PD_GPIO_0, LOW);
+      gpio_set_level(PD_GPIO_1, HIGH);
+      gpio_set_level(PD_GPIO_2, HIGH);
+    } break;
+    // 20 volts
+    case 20: {
+      gpio_set_level(PD_GPIO_0, LOW);
+      gpio_set_level(PD_GPIO_1, HIGH);
+      gpio_set_level(PD_GPIO_2, LOW);
+    } break;
+    default:
+      // start PD trigger with default 5 volts
+      gpio_set_level(PD_GPIO_0, HIGH);
+  }
+/*
+  if (VoltageValue == 3) {
+    ledcSetup(HEATER_CHANNEL, HEATER_HIGHFREQ, HEATER_RES);
+  } else {
+    ledcSetup(HEATER_CHANNEL, HEATER_FREQ, HEATER_RES);
+  }
+*/
+}

@@ -935,6 +935,36 @@ void ViSet_TimeoutsSetup::_buildMenu(){
 
 
 
+//  **************************************
+//  ***   PD trigger voltage           ***
+
+ViSet_PDSetup::ViSet_PDSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : MuiMenu(button, encoder){
+  // go back to prev viset on exit
+  parentvs = viset_evt_t::goBack;
+
+  // load temperature values from NVS
+  nvs_blob_read(T_IRON, T_pdVolts, &_volts, sizeof(_volts));
+
+  _buildMenu();
+}
+
+ViSet_PDSetup::~ViSet_PDSetup(){
+  // send command to reload time settings
+  //EVT_POST(IRON_SET_EVT, e2int(iron_t::reloadTimeouts));
+}
+
+void ViSet_PDSetup::_buildMenu(){
+  // create page "Settings->Power Supply"
+  muiItemId root_page = makePage(menu_MainConfiguration.at(3));
+
+  // create "Page title" item, bind it to root page
+  addMuippItem(new MuiItem_U8g2_PageTitle(u8g2, nextIndex(), MAIN_MENU_FONT1 ), root_page);
+
+
+}
+
+
+
 // *****************************
 // *** MUI entities
 

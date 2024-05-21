@@ -302,6 +302,26 @@ public:
 
 };
 
+/**
+ * @brief Power control menu
+ * 
+ */
+class ViSet_PDSetup : public MuiMenu {
+
+  uint32_t _volts{5};
+
+  // menu builder function
+  void _buildMenu();
+
+public:
+  // c-tor
+  ViSet_PDSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder);
+  // d-tor
+  ~ViSet_PDSetup();
+
+};
+
+
 
 // **************************
 // Helper functions
