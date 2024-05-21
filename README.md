@@ -29,11 +29,12 @@ WIP:
 | Mode | Key | Action | Function |
 |-|-|-|-|
 | Idle | `middle` | single click | Toggle heating mode on/off |
+| Suspended | `middle` | single click | WakeUp |
 | Working | `middle` | double click | Boost on/off |
 | Idle/Working | `middle` | long press | Enter configuration menu |
-| Idle/Working | `+`/`-` | single click | inc/decr working temperature in one step |
-| Idle/Working | `+`/`-` | double click | inc/decr working temperature in 4 steps |
-| Idle/Working | `+`/`-` | triple click | inc/decr working temperature in 6 steps |
+| Working | `+`/`-` | single click | inc/decr working temperature in one step |
+| Working | `+`/`-` | double click | inc/decr working temperature in 4 steps |
+| Working | `+`/`-` | triple click | inc/decr working temperature in 6 steps |
 | Menu navigation | `middle` | short press | enter menu section, comfirm action |
 | Menu navigation | `middle` | long press | escape action, previous page, etc |
 | Menu navigation | `+`/`-` | single click | move along menu items, inc/decr action  |
