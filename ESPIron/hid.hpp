@@ -14,7 +14,7 @@
 #include "common.hpp"
 #include "evtloop.hpp"
 #include "espasyncbutton.hpp"
-#include "muipp_u8g2.h"
+#include "muipp_u8g2.hpp"
 #include "lang/lang_en_us.h"
 
 

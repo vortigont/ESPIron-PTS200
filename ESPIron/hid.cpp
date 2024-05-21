@@ -604,7 +604,7 @@ void ViSet_MainMenu::_buildMenu(){
   // generate idx for "Back Button" item
   muiItemId bbuton_id = nextIndex();
   // create "Back Button" item, bind it to "Settings->Timers" page
-  addMuippItem( new MuiItem_U8g2_BackButton (u8g2, bbuton_id, dictionary[D_return], MAIN_MENU_FONT1, PAGE_BACK_BTN_X_OFFSET, PAGE_BACK_BTN_Y_OFFSET),
+  addMuippItem( new MuiItem_U8g2_BackButton (u8g2, bbuton_id, dictionary[D_return], MAIN_MENU_FONT1),
     page_set_time
   );
 
@@ -793,7 +793,7 @@ void ViSet_TemperatureSetup::_buildMenu(){
     page);
 
   // create "Back Button" item
-  addMuippItem(new MuiItem_U8g2_BackButton(u8g2, nextIndex(), dictionary[D_return], MAIN_MENU_FONT1, PAGE_BACK_BTN_X_OFFSET, PAGE_BACK_BTN_Y_OFFSET),
+  addMuippItem(new MuiItem_U8g2_BackButton(u8g2, nextIndex(), dictionary[D_return], MAIN_MENU_FONT1),
     page);
 
   // start menu from root page
@@ -924,8 +924,7 @@ void ViSet_TimeoutsSetup::_buildMenu(){
 
     // value label hint position in the bottom center of screen
     auto txt = new MuiItem_U8g2_StaticText(u8g2, nextIndex(), def_timeouts_label[i], PAGE_TITLE_FONT, u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight());
-    txt->h_align = text_align_t::center;
-    txt->v_align = text_align_t::bottom;
+    txt->setTextAlignment( text_align_t::center, text_align_t::bottom );
     addMuippItem(txt, page);
   }
 
