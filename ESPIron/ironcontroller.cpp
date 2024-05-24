@@ -10,6 +10,7 @@
     (at your option) any later version.
 */
 
+#include "common.hpp"
 #include "ironcontroller.hpp"
 #include "esp_sleep.h"
 #include "driver/rtc_io.h"
@@ -71,12 +72,24 @@ IronController::~IronController(){
 }
 
 void IronController::init(){
+  esp_err_t err;
+  std::unique_ptr<nvs::NVSHandle> handle = nvs::open_nvs_handle(T_IRON, NVS_READONLY, &err);
+
+  if (err == ESP_OK) {
+    handle->get_item(T_pdVolts, _voltage);
+  }
+
+  // init PD gpios
+  _pd_trigger_init();
+  _pd_trigger(_voltage);
 
   // load timeout values from NVS
   nvs_blob_read(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(IronTimeouts));
 
   // load temperature values from NVS
   nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
+
+
 
   // if we are not saving working temp, then use default one instead
   if (!_temp.savewrk)
@@ -143,6 +156,7 @@ void IronController::_mode_switcher(){
     }
 
     case ironState_t::idle : {
+      if (_xTicks.idle < _xTicks.motion) _xTicks.idle = _xTicks.motion;     // reset idle timer on motion detect
       if (pdTICKS_TO_MS(xTaskGetTickCount()) - pdTICKS_TO_MS(_xTicks.idle) > _timeout.suspend){
         _state = ironState_t::suspend;
         LOGI(T_CTRL, printf, "Engage suspend mode due to suspend timeout of %u ms\n", _timeout.suspend);
@@ -308,7 +322,10 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
       nvs_blob_read(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(IronTimeouts));
       break;
 
-
+    // adjust PD trigger (arrive from HID)
+    case evt::iron_t::pdVoltage :
+      _pd_trigger(*reinterpret_cast<int32_t*>(data));
+      break;
     // some
   }
 
@@ -324,3 +341,44 @@ void IronController::_evt_reqs(esp_event_base_t base, int32_t id, void* data){
   }
 }
 
+void IronController::_pd_trigger_init(){
+  gpio_config_t gpio_conf = {};
+  gpio_conf.mode = GPIO_MODE_OUTPUT;
+  gpio_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+  gpio_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  gpio_conf.pin_bit_mask = BIT64(PD_CFG_1) | BIT64(PD_CFG_2) | BIT64(PD_CFG_3);
+  gpio_conf.intr_type = GPIO_INTR_DISABLE;
+  gpio_config(&gpio_conf);
+}
+
+void IronController::_pd_trigger(uint32_t voltage){
+  switch (voltage) {
+    // 9 volts
+    case 9:
+      gpio_set_level(PD_CFG_1, LOW);
+      gpio_set_level(PD_CFG_2, LOW);
+      gpio_set_level(PD_CFG_3, LOW);
+      break;
+    // 12 volts
+    case 12:
+      gpio_set_level(PD_CFG_1, LOW);
+      gpio_set_level(PD_CFG_2, LOW);
+      gpio_set_level(PD_CFG_3, HIGH);
+      break;
+    // 15 volts
+    case 15:
+      gpio_set_level(PD_CFG_1, LOW);
+      gpio_set_level(PD_CFG_2, HIGH);
+      gpio_set_level(PD_CFG_3, HIGH);
+      break;
+    // 20 volts
+    case 20:
+      gpio_set_level(PD_CFG_1, LOW);
+      gpio_set_level(PD_CFG_2, HIGH);
+      gpio_set_level(PD_CFG_3, LOW);
+      break;
+    // PD trigger with default 5 volts
+    default:
+      gpio_set_level(PD_CFG_1, HIGH);
+  }
+}

@@ -59,9 +59,9 @@ Menu navigation demo capture.
 | :hotsprings: Temperature control | :white_check_mark: done |
 | :rocket: boost mode | :white_check_mark: done |
 | :floppy_disk: (optionaly) save/restore last used temperature | :white_check_mark: done |
+| PD voltage setup | :white_check_mark: done |
 | Tip calibration | :x: Planned |
 | Tip profiles | :x: Planned |
-| PD configuration | :x: Planned |
 | QC Configuration | :x: Planned |
 | Power profile | :x: Planned |
 | Power budget | :x: Planned |

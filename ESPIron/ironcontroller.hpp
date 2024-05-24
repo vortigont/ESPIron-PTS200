@@ -36,7 +36,8 @@ class IronController {
   // current iron mode
   ironState_t _state{ironState_t::idle};
 
-
+  // working voltage
+  uint32_t _voltage{5};
 
   // Mode Switcher timer
   TimerHandle_t _tmr_mode = nullptr;
@@ -99,5 +100,16 @@ private:
    */
   void _saveTemp(){ nvs_blob_write(T_IRON, T_temperatures, static_cast<void*>(&_timeout), sizeof(IronTimeouts)); };
 
+  /**
+   * @brief PD Trigger control
+   * 
+   * @param voltage 
+   */
+  void _pd_trigger(uint32_t voltage);
 
+  /**
+   * @brief init trigger gpios and resotre working voltage from NVS
+   * 
+   */
+  void _pd_trigger_init();
 };

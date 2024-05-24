@@ -45,17 +45,20 @@
 
 #define NUMBERSLIDE_X_OFFSET    10
 
+#define PWR_PD_VALUE_OFFSET     90
+
 
 // EN-US
 namespace lang_en_us {
 
 // EN US
-static constexpr const char* T_Boost        = "Boost";
+static constexpr const char* T_Boost        = "Boost";              // state display
 static constexpr const char* T_Error        = "Error";
-static constexpr const char* T_Heating      = "Heating";
-static constexpr const char* T_Idle         = "Idle";
+static constexpr const char* T_Heating      = "Heating";            // state display
+static constexpr const char* T_Idle         = "Idle";               // state display
 static constexpr const char* T_min          = "min.";               // short for 'minutes'
 static constexpr const char* T_NoTip        = "No tip!";            // state display when tip is missing
+static constexpr const char* T_PDVoltage    = "PD Voltage:";        // PowerDelivery trigger voltage
 static constexpr const char* T_sec          = "sec.";               // short for 'seconds'
 static constexpr const char* T_setT         = "Set:";               // Target temperature on main screen
 static constexpr const char* T_standby      = "Standby";            // state display in 'Standby'
@@ -90,6 +93,9 @@ static constexpr const char* T_TimeIdle = "Idle timeout";
 static constexpr const char* T_TimeSuspend = "Suspend time";
 static constexpr const char* T_TimeBoost = "Boost timeout";
 
+// Power Supply settings menu
+static constexpr const char* T_PwrPD = "PD Trigger";
+static constexpr const char* T_PwrQC = "QC Trigger";
 
 
 } // end  of namespace lang_en_us
@@ -107,6 +113,7 @@ static constexpr std::array<const char *, DICT___SIZE> dictionary = {
     lang_en_us::T_min,
     lang_en_us::T_NoTip,
     lang_en_us::T_return,
+    lang_en_us::T_PDVoltage,
     lang_en_us::T_sec,
     lang_en_us::T_SaveLast_box,
     lang_en_us::T_SaveLast_hint,
