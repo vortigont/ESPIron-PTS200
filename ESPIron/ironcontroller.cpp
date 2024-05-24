@@ -156,6 +156,7 @@ void IronController::_mode_switcher(){
     }
 
     case ironState_t::idle : {
+      if (_xTicks.idle < _xTicks.motion) _xTicks.idle = _xTicks.motion;     // reset idle timer on motion detect
       if (pdTICKS_TO_MS(xTaskGetTickCount()) - pdTICKS_TO_MS(_xTicks.idle) > _timeout.suspend){
         _state = ironState_t::suspend;
         LOGI(T_CTRL, printf, "Engage suspend mode due to suspend timeout of %u ms\n", _timeout.suspend);
