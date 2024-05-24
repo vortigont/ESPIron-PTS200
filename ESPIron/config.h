@@ -25,9 +25,9 @@
 
 // CH224K USB PD chip pins connection
 // https://components101.com/sites/default/files/component_datasheet/WCH_CH224K_ENG.pdf
-#define PD_GPIO_0          GPIO_NUM_16
-#define PD_GPIO_1          GPIO_NUM_17
-#define PD_GPIO_2          GPIO_NUM_18
+#define PD_CFG_1          GPIO_NUM_16
+#define PD_CFG_2          GPIO_NUM_17
+#define PD_CFG_3          GPIO_NUM_18
 
 #define QC_DP_PIN         14
 #define QC_DM_PIN         13

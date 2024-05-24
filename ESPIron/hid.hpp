@@ -11,6 +11,7 @@
 */
 #pragma once
 #include <mutex>
+#include <sstream>
 #include "common.hpp"
 #include "evtloop.hpp"
 #include "espasyncbutton.hpp"
@@ -27,6 +28,7 @@ enum class viset_evt_t {
   vsMenuMain,           // switch to Main Menu
   vsMenuTemperature,    // switch to Temperature setup menu
   vsMenuTimers,         // switch to Timers setup menu
+  vsMenuPDTrigger,      // switch to PD Trigger menu
   goBack                // switch to previous ViSet
 };
 
@@ -91,11 +93,11 @@ class IronHID {
   // stack of ViSet's we go through (for goBack navigation)
   std::vector<viset_evt_t> _vistack;
 
-  // screen redraw timer
-  TimerHandle_t _tmr_display = nullptr;
-
   // ViSet mutex
   std::mutex _mtx;
+
+  // screen renderer task
+  TaskHandle_t    _task_hndlr = nullptr;
 
   // event handler
   esp_event_handler_instance_t _evt_viset_handler{nullptr};
@@ -115,6 +117,11 @@ class IronHID {
    * 
    */
   void _init_screen();
+
+  // start RTOS task that will refresh display
+  void _start_runner();
+  // stop RTOS task that will refresh display
+  void _stop_runner();
 
   void _viset_spawn(viset_evt_t v);
 
@@ -306,18 +313,35 @@ public:
  * @brief Power control menu
  * 
  */
-class ViSet_PDSetup : public MuiMenu {
+class ViSet_PwrSetup : public MuiMenu {
 
-  uint32_t _volts{5};
+  static constexpr std::array<uint32_t, 5> _pd_voltage = {5, 9, 12, 15, 20};
+  std::array<uint32_t, 5>::const_iterator _voption;
+
+  uint32_t _volts{5}, _vin{5};
+
+  // containters for string data that will be printed on-screen
+  // selected PD voltage
+  std::string _pdv_s;
+  // curent Vin value from a sensor
+  std::string _vin_s;
+
+  esp_event_handler_instance_t _evt_snsr_handler = nullptr;
 
   // menu builder function
   void _buildMenu();
 
+  // option list switch to prev
+  void _prev_val();
+
+  // option list switch to next
+  void _next_val();
+
 public:
   // c-tor
-  ViSet_PDSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder);
+  ViSet_PwrSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder);
   // d-tor
-  ~ViSet_PDSetup();
+  ~ViSet_PwrSetup();
 
 };
 
@@ -332,9 +356,13 @@ public:
  * @param v 
  * @return std::string 
  */
-std::string numeric_to_string(int32_t v);
-
-
+template <typename T>
+std::string numeric_to_string(T v){
+  std::ostringstream oss;
+  //oss << std::setprecision(1) << number;
+  oss << v;
+  return oss.str();
+}
 
 // **************************
 // Our global instance of HID

@@ -56,6 +56,9 @@ enum class iron_t:int32_t {
   reloadTemp,               // reload temperature configuration
   reloadTimeouts,           // reload timeouts configuration
 
+  // Commands - power control
+  pdVoltage,                // switch PD trigger
+
   // State notifications
   stateWorking = 300,
   stateStandby,             // iron controller switched to 'Standby' mode

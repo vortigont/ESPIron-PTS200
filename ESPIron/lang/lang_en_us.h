@@ -45,6 +45,8 @@
 
 #define NUMBERSLIDE_X_OFFSET    10
 
+#define PWR_PD_VALUE_OFFSET     90
+
 
 // EN-US
 namespace lang_en_us {
@@ -56,6 +58,7 @@ static constexpr const char* T_Heating      = "Heating";            // state dis
 static constexpr const char* T_Idle         = "Idle";               // state display
 static constexpr const char* T_min          = "min.";               // short for 'minutes'
 static constexpr const char* T_NoTip        = "No tip!";            // state display when tip is missing
+static constexpr const char* T_PDVoltage    = "PD Voltage:";        // PowerDelivery trigger voltage
 static constexpr const char* T_sec          = "sec.";               // short for 'seconds'
 static constexpr const char* T_setT         = "Set:";               // Target temperature on main screen
 static constexpr const char* T_standby      = "Standby";            // state display in 'Standby'
@@ -110,6 +113,7 @@ static constexpr std::array<const char *, DICT___SIZE> dictionary = {
     lang_en_us::T_min,
     lang_en_us::T_NoTip,
     lang_en_us::T_return,
+    lang_en_us::T_PDVoltage,
     lang_en_us::T_sec,
     lang_en_us::T_SaveLast_box,
     lang_en_us::T_SaveLast_hint,

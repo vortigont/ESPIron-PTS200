@@ -40,6 +40,7 @@ enum dict_index {
     D_min,
     D_notip,
     D_return,
+    D_PDVoltage,
     D_sec,
     D_SaveLast_box,
     D_SaveLast_hint,

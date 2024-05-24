@@ -41,18 +41,11 @@ bool MSC_Updating_Flag = false;
 
 // *** Arduino setup ***
 void setup() {
-  // set PD-trigger pins
-  pinMode(PD_CFG_0, OUTPUT);
-  pinMode(PD_CFG_1, OUTPUT);
-  pinMode(PD_CFG_2, OUTPUT);
 
   // tip sensor pin
   pinMode(SENSOR_PIN, INPUT_PULLUP);
   // buzzer in
   pinMode(BUZZER_PIN, OUTPUT);
-
-  // start PD trigger with default 5 volts
-  digitalWrite(PD_CFG_0, HIGH);
 
   Serial.begin(115200);
 #ifdef ARDUINO_USB_MODE
@@ -110,9 +103,6 @@ void setup() {
 
   // Initialize Iron Controller
   espIron.init();
-
-  // request configured voltage via PD trigger
-  PD_Update();
 
   // I2C bus (for display)
   Wire.begin();

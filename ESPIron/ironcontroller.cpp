@@ -10,7 +10,7 @@
     (at your option) any later version.
 */
 
-#include "config.h"
+#include "common.hpp"
 #include "ironcontroller.hpp"
 #include "esp_sleep.h"
 #include "driver/rtc_io.h"
@@ -321,7 +321,10 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
       nvs_blob_read(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(IronTimeouts));
       break;
 
-
+    // adjust PD trigger (arrive from HID)
+    case evt::iron_t::pdVoltage :
+      _pd_trigger(*reinterpret_cast<int32_t*>(data));
+      break;
     // some
   }
 
@@ -342,7 +345,7 @@ void IronController::_pd_trigger_init(){
   gpio_conf.mode = GPIO_MODE_OUTPUT;
   gpio_conf.pull_up_en = GPIO_PULLUP_DISABLE;
   gpio_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-  gpio_conf.pin_bit_mask = BIT64(PD_GPIO_0) | BIT64(PD_GPIO_1) | BIT64(PD_GPIO_2);
+  gpio_conf.pin_bit_mask = BIT64(PD_CFG_1) | BIT64(PD_CFG_2) | BIT64(PD_CFG_3);
   gpio_conf.intr_type = GPIO_INTR_DISABLE;
   gpio_config(&gpio_conf);
 }
@@ -350,38 +353,31 @@ void IronController::_pd_trigger_init(){
 void IronController::_pd_trigger(uint32_t voltage){
   switch (voltage) {
     // 9 volts
-    case 9: {
-      gpio_set_level(PD_GPIO_0, LOW);
-      gpio_set_level(PD_GPIO_1, LOW);
-      gpio_set_level(PD_GPIO_2, LOW);
-    } break;
+    case 9:
+      gpio_set_level(PD_CFG_1, LOW);
+      gpio_set_level(PD_CFG_2, LOW);
+      gpio_set_level(PD_CFG_3, LOW);
+      break;
     // 12 volts
-    case 12: {
-      gpio_set_level(PD_GPIO_0, LOW);
-      gpio_set_level(PD_GPIO_1, LOW);
-      gpio_set_level(PD_GPIO_2, HIGH);
-    } break;
+    case 12:
+      gpio_set_level(PD_CFG_1, LOW);
+      gpio_set_level(PD_CFG_2, LOW);
+      gpio_set_level(PD_CFG_3, HIGH);
+      break;
     // 15 volts
-    case 15: {
-      gpio_set_level(PD_GPIO_0, LOW);
-      gpio_set_level(PD_GPIO_1, HIGH);
-      gpio_set_level(PD_GPIO_2, HIGH);
-    } break;
+    case 15:
+      gpio_set_level(PD_CFG_1, LOW);
+      gpio_set_level(PD_CFG_2, HIGH);
+      gpio_set_level(PD_CFG_3, HIGH);
+      break;
     // 20 volts
-    case 20: {
-      gpio_set_level(PD_GPIO_0, LOW);
-      gpio_set_level(PD_GPIO_1, HIGH);
-      gpio_set_level(PD_GPIO_2, LOW);
-    } break;
+    case 20:
+      gpio_set_level(PD_CFG_1, LOW);
+      gpio_set_level(PD_CFG_2, HIGH);
+      gpio_set_level(PD_CFG_3, LOW);
+      break;
+    // PD trigger with default 5 volts
     default:
-      // start PD trigger with default 5 volts
-      gpio_set_level(PD_GPIO_0, HIGH);
+      gpio_set_level(PD_CFG_1, HIGH);
   }
-/*
-  if (VoltageValue == 3) {
-    ledcSetup(HEATER_CHANNEL, HEATER_HIGHFREQ, HEATER_RES);
-  } else {
-    ledcSetup(HEATER_CHANNEL, HEATER_FREQ, HEATER_RES);
-  }
-*/
 }

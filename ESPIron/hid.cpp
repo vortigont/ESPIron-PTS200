@@ -10,10 +10,10 @@
     (at your option) any later version.
 */
 
+#include <iomanip> 
 #include "hid.hpp"
 #include "nvs.hpp"
 #include "const.h"
-#include <sstream>
 #include "log.h"
 
 /*
@@ -50,6 +50,11 @@ U8G2_SH1107_64X128_F_HW_I2C u8g2(U8G2_R1, SH1107_RST_PIN);
 #define X_OFFSET_VIN              94
 #define Y_OFFSET_VIN              50
 
+// Display task
+#define DISP_TASK_PRIO            tskIDLE_PRIORITY+1    // task priority
+#define DISP_TASK_STACK           3072
+#define DISP_TASK_NAME            "TSK_DISP"
+
 
 // shortcut type aliases
 using ESPButton::event_t;
@@ -69,8 +74,40 @@ IronHID::~IronHID(){
     _evt_ntfy_handler = nullptr;
   }
 
-  if (_tmr_display)
-    xTimerDelete( _tmr_display, portMAX_DELAY );
+  // stop display task
+  _stop_runner();
+}
+
+
+void IronHID::init(){
+  // link our event loop with ESPButton's loop
+  ESPButton::set_event_loop_hndlr(evt::get_hndlr());
+
+  // create default ViSet with Main Work screen
+  switchViSet(viset_evt_t::vsMainScreen);
+
+  // initialize screen
+  _init_screen();
+
+  // subscribe to notification events
+  if (!_evt_ntfy_handler){
+    esp_event_handler_instance_register_with(
+      evt::get_hndlr(),
+      IRON_NOTIFY,
+      e2int( iron_t::stateSuspend ),    // I need only 'suspend' for now
+      // notification on suspend
+      [](void* self, esp_event_base_t base, int32_t id, void* data) { u8g2.sleepOn(); },    // suspend display
+      this,
+      &_evt_ntfy_handler
+    );
+
+  }
+
+
+  // enable middle button
+  _btn.enable();
+  // enable 'encoder' buttons
+  _encdr.begin();
 }
 
 void IronHID::_init_screen(){
@@ -92,17 +129,8 @@ void IronHID::_init_screen(){
     &_evt_viset_handler
   );
 
-  // setup timer that will redraw screen periodically
-  if (!_tmr_display){
-    _tmr_display = xTimerCreate("scrT",
-                              pdMS_TO_TICKS(TIMER_DISPLAY_REFRESH),
-                              pdTRUE,
-                              static_cast<void*>(this),
-                              [](TimerHandle_t h) { static_cast<IronHID*>(pvTimerGetTimerID(h))->_viset_render(); }
-                            );
-    if (_tmr_display)
-      xTimerStart( _tmr_display, portMAX_DELAY );
-  }
+  // start display rendering task
+  _start_runner();
 
 /*  TBD
   if(_hand_side){
@@ -112,6 +140,24 @@ void IronHID::_init_screen(){
   }
 */
 
+}
+
+void IronHID::_start_runner(){
+  if (_task_hndlr) return;    // we are already running
+  xTaskCreatePinnedToCore([](void* pvParams){ static_cast<IronHID*>(pvParams)->_viset_render(); },
+                          DISP_TASK_NAME,
+                          DISP_TASK_STACK,
+                          (void *)this,
+                          DISP_TASK_PRIO,
+                          &_task_hndlr,
+                          tskNO_AFFINITY ); // == pdPASS;
+}
+
+void IronHID::_stop_runner(){
+  if(_task_hndlr){
+    vTaskDelete(_task_hndlr);
+    _task_hndlr = nullptr;
+  }
 }
 
 void IronHID::switchViSet(viset_evt_t v){
@@ -157,47 +203,31 @@ void IronHID::_viset_spawn(viset_evt_t v){
     case viset_evt_t::vsMenuTimers :
       viset = std::make_unique<ViSet_TimeoutsSetup>(_btn, _encdr);
       break;
+    case viset_evt_t::vsMenuPDTrigger :
+      viset = std::make_unique<ViSet_PwrSetup>(_btn, _encdr);
+      break;
   };
 }
 
-void IronHID::init(){
-  // link our event loop with ESPButton's loop
-  ESPButton::set_event_loop_hndlr(evt::get_hndlr());
-
-  // create default ViSet with Main Work screen
-  switchViSet(viset_evt_t::vsMainScreen);
-
-  // initialize screen
-  _init_screen();
-
-  // subscribe to notification events
-  if (!_evt_ntfy_handler){
-    esp_event_handler_instance_register_with(
-      evt::get_hndlr(),
-      IRON_NOTIFY,
-      e2int( iron_t::stateSuspend ),    // I need only 'suspend' for now
-      // notification on suspend
-      [](void* self, esp_event_base_t base, int32_t id, void* data) { u8g2.sleepOn(); },    // suspend display
-      this,
-      &_evt_ntfy_handler
-    );
-
-  }
-
-
-  // enable middle button
-  _btn.enable();
-  // enable 'encoder' buttons
-  _encdr.begin();
-}
-
 void IronHID::_viset_render(){
+  TickType_t xLastWakeTime = xTaskGetTickCount ();
   std::unique_lock<std::mutex> lock(_mtx, std::defer_lock);
-  // try to obtain mutex lock, if mutex is not available then simply skip this run and return later
-  if (!lock.try_lock())
-    return;
 
-  viset->drawScreen();
+  for (;;){
+    // sleep to accomodate specified display refresh rate
+    // if task has been delayed, than we can't keep up with desired refresh rate, let's give other tasks time to run anyway, display is not that critical
+    if ( xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS(TIMER_DISPLAY_REFRESH) ) ) taskYIELD();
+
+    // try to obtain mutex lock, if mutex is not available then simply skip this run and return later
+    if (!lock.try_lock())
+      continue;
+
+    if (viset) viset->drawScreen();
+    // release mutex
+    lock.unlock();
+  }
+  // Task must self-terminate (if ever)
+  vTaskDelete(NULL);
 }
 
 // ***** VisualSet - Generic *****
@@ -651,6 +681,10 @@ void ViSet_MainMenu::_submenu_selector(size_t index){
     case 1 :  // timers settings
       EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMenuTimers));
       break;
+    case 3 :  // PD Setup
+      EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMenuPDTrigger));
+      break;
+
     default:  // for unknown items quit to main screen
       EVT_POST(IRON_VISET, e2int(viset_evt_t::vsMainScreen));
   }
@@ -753,11 +787,11 @@ void ViSet_TemperatureSetup::_buildMenu(){
     muiItemId idx = nextIndex();
     auto hslide = std::make_shared< MuiItem_U8g2_NumberHSlide<int32_t> >(
       u8g2, idx,
-      nullptr,   // label
-      _temp.at(i),
-      def_temp_min[i], def_temp_max[i], def_temp_step[i],
-      numeric_to_string,
-      nullptr, nullptr, nullptr,
+      nullptr,        // label
+      _temp.at(i),    // current temp value
+      def_temp_min[i], def_temp_max[i], def_temp_step[i],   // constrains
+      nullptr,        // print unformatted numeric value
+      nullptr, nullptr, nullptr,    // no callbacks required
       NUMERIC_FONT1, MAIN_MENU_FONT2,
       u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, NUMBERSLIDE_X_OFFSET
     );
@@ -768,14 +802,14 @@ void ViSet_TemperatureSetup::_buildMenu(){
     // make this item autoselected on this page
     pageAutoSelect(page, idx);
 
-/*
-    // todo: add celsius/farenh label
-    // value label hint position in the bottom center of screen
-    auto txt = new MuiItem_U8g2_StaticText(u8g2, nextIndex(), def_timeouts_label[i], PAGE_TITLE_FONT, u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight());
-    txt->h_align = text_align_t::bottom;
-    txt->v_align = text_align_t::center;
-    addMuippItem(txt, page);
-*/
+    /*
+      // todo: add celsius/farenh label
+      // value label hint position in the bottom center of screen
+      auto txt = new MuiItem_U8g2_StaticText(u8g2, nextIndex(), def_timeouts_label[i], PAGE_TITLE_FONT, u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight());
+      txt->h_align = text_align_t::bottom;
+      txt->v_align = text_align_t::center;
+      addMuippItem(txt, page);
+    */
   }
 
   // ***
@@ -908,10 +942,10 @@ void ViSet_TimeoutsSetup::_buildMenu(){
     auto hslide = new MuiItem_U8g2_NumberHSlide<unsigned>(
       u8g2, idx,
       NULL,   // label
-      _timeout.at(i),
-      def_timeouts_min[i], def_timeouts_max[i], def_timeouts_step[i],
-      numeric_to_string,
-      nullptr, nullptr, nullptr,
+      _timeout.at(i),       // current time value for Item
+      def_timeouts_min[i], def_timeouts_max[i], def_timeouts_step[i],   // constrains
+      nullptr,                      // print unformatted numeric value
+      nullptr, nullptr, nullptr,    // no callbacks required
       NUMERIC_FONT1, MAIN_MENU_FONT2,
       u8g2.getDisplayWidth()/2, u8g2.getDisplayHeight()/2, NUMBERSLIDE_X_OFFSET
     );
@@ -937,43 +971,110 @@ void ViSet_TimeoutsSetup::_buildMenu(){
 //  **************************************
 //  ***   PD trigger voltage           ***
 
-ViSet_PDSetup::ViSet_PDSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : MuiMenu(button, encoder){
+ViSet_PwrSetup::ViSet_PwrSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder) : MuiMenu(button, encoder){
   // go back to prev viset on exit
   parentvs = viset_evt_t::goBack;
 
-  // load temperature values from NVS
-  nvs_blob_read(T_IRON, T_pdVolts, &_volts, sizeof(_volts));
+  // load PD voltage values from NVS
+  esp_err_t err;
+  std::unique_ptr<nvs::NVSHandle> handle = nvs::open_nvs_handle(T_IRON, NVS_READONLY, &err);
+  if (err == ESP_OK) {
+    handle->get_item(T_pdVolts, _volts);
+  }
+
+  // set our iterator to selected voltage option
+  _voption = std::find(_pd_voltage.cbegin(), _pd_voltage.cend(), _volts);
+  if (_voption == _pd_voltage.cend())
+    _voption = _pd_voltage.cbegin();
+
+  // subscribe to Vin sensor data
+  esp_event_handler_instance_register_with(evt::get_hndlr(), SENSOR_DATA, e2int(evt::iron_t::vin),
+            [](void* self, esp_event_base_t base, int32_t id, void* data){
+              static_cast<ViSet_PwrSetup*>(self)->_vin = *static_cast<uint32_t*>(data);
+              static_cast<ViSet_PwrSetup*>(self)->_rr = true;    // refresh screen on updated value
+            },
+            this, &_evt_snsr_handler);
 
   _buildMenu();
 }
 
-ViSet_PDSetup::~ViSet_PDSetup(){
-  // send command to reload time settings
-  //EVT_POST(IRON_SET_EVT, e2int(iron_t::reloadTimeouts));
+ViSet_PwrSetup::~ViSet_PwrSetup(){
+  // unsubscribe sensor events
+  esp_event_handler_instance_unregister_with(evt::get_hndlr(), SENSOR_DATA, e2int(evt::iron_t::vin), _evt_snsr_handler);
+  _evt_snsr_handler = nullptr;
+
+  // save PD voltage value to NVS
+  esp_err_t err;
+  std::unique_ptr<nvs::NVSHandle> handle = nvs::open_nvs_handle(T_IRON, NVS_READWRITE, &err);
+  if (err == ESP_OK) {
+    handle->set_item(T_pdVolts, _volts);
+  }
 }
 
-void ViSet_PDSetup::_buildMenu(){
+void ViSet_PwrSetup::_buildMenu(){
   // create page "Settings->Power Supply"
   muiItemId root_page = makePage(menu_MainConfiguration.at(3));
 
   // create "Page title" item, bind it to root page
   addMuippItem(new MuiItem_U8g2_PageTitle(u8g2, nextIndex(), MAIN_MENU_FONT1 ), root_page);
 
+  // PD Values selector
+  muiItemId idx = nextIndex();
+  addMuippItem(
+    new MuiItem_U8g2_ValuesList(u8g2, idx,
+      dictionary[D_PDVoltage],
+      // get a string of current value in a list
+      [&](){ _pdv_s = std::to_string(_volts); return _pdv_s.data(); },
+      // move iterator to next item in list
+      [&](){ _next_val(); },
+      // move iterator to prev item in list
+      [&](){ _prev_val(); },
+      0, PWR_PD_VALUE_OFFSET, u8g2.getDisplayHeight()/2,    // cursor point
+      PAGE_TITLE_FONT),
+    root_page
+  );
+  // autoselect ValList item
+  pageAutoSelect(root_page, idx);
 
+  // Vin sensor data as Text
+  addMuippItem(
+    new MuiItem_U8g2_TextCallBack(u8g2, nextIndex(),
+      [&](){ std::ostringstream oss; oss.precision(1); oss << std::fixed << "Vin:" << _vin/1000.0 << "V"; _vin_s = oss.str(); return _vin_s.data(); },
+      MAIN_MENU_FONT3, 0, u8g2.getDisplayHeight(), text_align_t::left, text_align_t::bottom
+      ),
+    root_page
+  );
+
+  // "Back Button" item
+  addMuippItem(
+    new MuiItem_U8g2_BackButton(u8g2, nextIndex(), dictionary[D_return], MAIN_MENU_FONT1),
+    root_page
+  );
+
+  // start menu from root page
+  menuStart(root_page);
 }
 
+void ViSet_PwrSetup::_next_val(){
+  _voption = std::next(_voption);
+  if (_voption == _pd_voltage.cend())
+    _voption = _pd_voltage.cbegin();
+  _volts = *_voption;
+  EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::pdVoltage), &_volts, sizeof(_volts));
+}
+
+void ViSet_PwrSetup::_prev_val(){
+  if (_voption == _pd_voltage.begin())
+    _voption = _pd_voltage.cend();
+  _voption = std::prev(_voption);
+  _volts = *_voption;
+  EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::pdVoltage), &_volts, sizeof(_volts));
+}
 
 
 // *****************************
 // *** MUI entities
 
-
-std::string numeric_to_string(int32_t v){
-  std::ostringstream oss;
-  //oss << std::setprecision(1) << number;
-  oss << v;
-  return oss.str().data();
-}
 
 
 
