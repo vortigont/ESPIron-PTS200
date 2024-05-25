@@ -95,12 +95,7 @@
 //#define PID_ENABLE        true  // enable PID control
 #define PID_ENGAGE_DIFF   30    // temperature difference when PID algo should be engaged
 #define BEEP_ENABLE       true  // enable/disable buzzer
-#define VOLTAGE_VALUE     3     // 电压值
-#define QC_ENABLE         false // enable/disable QC3.0
-#define MAINSCREEN        1     // type of main screen (0: big numbers; 1: more infos)
 
-// EEPROM identifier
-#define EEPROM_SIZE       1024
 
 // MOSFET control definitions
 #if defined(P_MOSFET)           // P-Channel MOSFET

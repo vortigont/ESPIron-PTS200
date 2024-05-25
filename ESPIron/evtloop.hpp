@@ -57,7 +57,11 @@ enum class iron_t:int32_t {
   reloadTimeouts,           // reload timeouts configuration
 
   // Commands - power control
-  pdVoltage,                // switch PD trigger
+  pdVoltage,                // switch PD trigger, arg uint32_t in V
+  qcVoltage,                // switch QC trigger, arg uint32_t in V
+  qc2enable,                // activate QC trigger in QC2 mode
+  qc3enable,                // activate QC trigger in QC3 mode
+  qcDisable,                // disable QC trigger
 
   // State notifications
   stateWorking = 300,

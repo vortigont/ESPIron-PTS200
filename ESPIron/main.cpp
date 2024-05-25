@@ -8,10 +8,8 @@
 #include "log.h"
 
 #ifdef CONFIG_TINYUSB_MSC_ENABLED
-#include <QC3Control.h>
 #include "FirmwareMSC.h"
 #include "USB.h"
-QC3Control QC(QC_DP_PIN, QC_DM_PIN);
 FirmwareMSC MSC_Update;
 #endif
 
@@ -31,7 +29,6 @@ VinSensor vin;
 // Default value can be changed by user and stored in EEPROM
 // 用户可以更改并存储在EEPROM中的默认值
 bool beepEnable = BEEP_ENABLE;
-bool QCEnable = QC_ENABLE;
 
 // MSC Firmware
 bool MSC_Updating_Flag = false;
@@ -47,15 +44,39 @@ void setup() {
   // buzzer in
   pinMode(BUZZER_PIN, OUTPUT);
 
-  Serial.begin(115200);
 #ifdef ARDUINO_USB_MODE
   Serial.setTxTimeoutMs(0);
 #endif
 
+  /**
+   *  QC trigger is ugly, it interferes with USB MSC and serial output. Required to figure it our at early boot statge
+   *  and disable serial output. It is useless anyway and can bring additional delayes on LOG printing
+   * 
+   */
+  esp_err_t err;
+  std::unique_ptr<nvs::NVSHandle> handle = nvs::open_nvs_handle(T_IRON, NVS_READONLY, &err);
+
+  if (err == ESP_OK){
+    // QC trigger mode
+    uint32_t qc_mode{0};
+    handle->get_item(T_qcMode, qc_mode);
+    if (qc_mode)
+      Serial.end();
+    else {
+      Serial.begin(115200);
 #if PTS200_DEBUG_LEVEL > 3
-  // let ACM device intitialize to catch early log output
-  delay(3000);
+      // let ACM device intitialize to catch early log output
+      delay(1500);
 #endif
+    }
+  } else {
+    Serial.begin(115200);
+#if PTS200_DEBUG_LEVEL > 3
+    // let ACM device intitialize to catch early log output
+    delay(1500);
+#endif
+  }
+
   LOGI(T_IRON, printf, "ESPIron PTS200 firmware version: %s\n", FW_VERSION);
 
   // Start event loop task
@@ -71,35 +92,6 @@ void setup() {
     write_default_EEPROM();
   }
 */
-
-  // fake readings for now
-  int VoltageValue = 20;
-
-#ifdef CONFIG_TINYUSB_MSC_ENABLED
-  if (QCEnable) {
-    QC.begin();
-    delay(100);
-    switch (VoltageValue) {
-      case 0: {
-        QC.set9V();
-      } break;
-      case 1: {
-        QC.set12V();
-      } break;
-      case 2: {
-        QC.set12V();
-      } break;
-      case 3: {
-        QC.set20V();
-      } break;
-      case 4: {
-        QC.set20V();
-      } break;
-      default:
-        break;
-    }
-  }
-#endif
 
   // Initialize Iron Controller
   espIron.init();
@@ -134,14 +126,12 @@ void loop() {
 
 // creates a short beep on the buzzer 在蜂鸣器上创建一个短的哔哔声
 void beep() {
-//  if (beepEnable) {
     for (uint8_t i = 0; i < 255; i++) {
       digitalWrite(BUZZER_PIN, HIGH);
       delayMicroseconds(125);
       digitalWrite(BUZZER_PIN, LOW);
       delayMicroseconds(125);
     }
-//  }
 }
 
 

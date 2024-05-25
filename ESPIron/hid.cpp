@@ -105,6 +105,9 @@ void IronHID::init(){
 
 
   // enable middle button
+#ifdef DEVELOP_MODE
+  _btn.timeouts.setDebounce(15000);
+#endif
   _btn.enable();
   // enable 'encoder' buttons
   _encdr.begin();
@@ -207,6 +210,10 @@ void IronHID::_viset_spawn(viset_evt_t v){
       viset = std::make_unique<ViSet_PwrSetup>(_btn, _encdr);
       break;
   };
+
+  // if switched to any screen but main, switch iron to idle mode
+  if (v != viset_evt_t::vsMainScreen)
+    EVT_POST(IRON_SET_EVT, e2int(iron_t::stateIdle));
 }
 
 void IronHID::_viset_render(){
@@ -979,11 +986,13 @@ ViSet_PwrSetup::ViSet_PwrSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryE
   esp_err_t err;
   std::unique_ptr<nvs::NVSHandle> handle = nvs::open_nvs_handle(T_IRON, NVS_READONLY, &err);
   if (err == ESP_OK) {
-    handle->get_item(T_pdVolts, _volts);
+    handle->get_item(T_pdVolts, _volts_pd);
+    handle->get_item(T_qcVolts, _volts_qc);
+    handle->get_item(T_qcMode, _qc_mode);
   }
 
   // set our iterator to selected voltage option
-  _voption = std::find(_pd_voltage.cbegin(), _pd_voltage.cend(), _volts);
+  _voption = std::find(_pd_voltage.cbegin(), _pd_voltage.cend(), _volts_pd);
   if (_voption == _pd_voltage.cend())
     _voption = _pd_voltage.cbegin();
 
@@ -1007,7 +1016,9 @@ ViSet_PwrSetup::~ViSet_PwrSetup(){
   esp_err_t err;
   std::unique_ptr<nvs::NVSHandle> handle = nvs::open_nvs_handle(T_IRON, NVS_READWRITE, &err);
   if (err == ESP_OK) {
-    handle->set_item(T_pdVolts, _volts);
+    handle->set_item(T_pdVolts, _volts_pd);
+    handle->set_item(T_qcVolts, _volts_qc);
+    handle->set_item(T_qcMode, _qc_mode);
   }
 }
 
@@ -1016,7 +1027,37 @@ void ViSet_PwrSetup::_buildMenu(){
   muiItemId root_page = makePage(menu_MainConfiguration.at(3));
 
   // create "Page title" item, bind it to root page
-  addMuippItem(new MuiItem_U8g2_PageTitle(u8g2, nextIndex(), MAIN_MENU_FONT1 ), root_page);
+  auto ptitle_idx = nextIndex();
+  addMuippItem(new MuiItem_U8g2_PageTitle(u8g2, ptitle_idx, MAIN_MENU_FONT1 ), root_page);
+
+  // create and add to main page a list with settings selection options
+  muiItemId scroll_list_id = nextIndex();
+
+  // Power Control menu options dynamic scroll list
+  auto list = std::make_shared< MuiItem_U8g2_DynamicScrollList>(u8g2, scroll_list_id,
+    [](size_t index){ /* Serial.printf("idx:%u\n", index); */ return menu_PwrControlOpts.at(index); },   // this lambda will feed localized strings to the MuiItem list builder class
+    [](){ return menu_PwrControlOpts.size(); },
+    nullptr,                                                        // action callback
+    MAIN_MENU_Y_SHIFT, MAIN_MENU_ROWS,                              // offset for each line of text and total number of lines in menu
+    MAIN_MENU_X_OFFSET, MAIN_MENU_Y_OFFSET,                         // x,y cursor
+    PAGE_TITLE_FONT, PAGE_TITLE_FONT
+  );
+
+  // dynamic list will act as page selector
+  list->listopts.page_selector = true;
+  list->listopts.back_on_last = true;
+  list->on_escape = mui_event_t::quitMenu;                          // this is the only active element on a page, so I quit on escape
+  // move menu object into MuiPP page
+  addMuippItem(list, root_page);
+  // this is the only active Item on a page, so auto-select it
+  pageAutoSelect(root_page, scroll_list_id);
+
+  // **************************************
+  // *****  Page "Power Supply->PD Trigger"
+  muiItemId pd_page = makePage(menu_PwrControlOpts.at(0), root_page);
+
+  // Page Title
+  addItemToPage(ptitle_idx, pd_page);
 
   // PD Values selector
   muiItemId idx = nextIndex();
@@ -1024,51 +1065,158 @@ void ViSet_PwrSetup::_buildMenu(){
     new MuiItem_U8g2_ValuesList(u8g2, idx,
       dictionary[D_PDVoltage],
       // get a string of current value in a list
-      [&](){ _pdv_s = std::to_string(_volts); return _pdv_s.data(); },
-      // move iterator to next item in list
-      [&](){ _next_val(); },
-      // move iterator to prev item in list
-      [&](){ _prev_val(); },
+      [&](){ _pdv_s = std::to_string(_volts_pd); return _pdv_s.data(); },
+      [&](){ _pd_next_val(); },      // move iterator to next item in list
+      [&](){ _pd_prev_val(); },      // move iterator to prev item in list
       0, PWR_PD_VALUE_OFFSET, u8g2.getDisplayHeight()/2,    // cursor point
       PAGE_TITLE_FONT),
-    root_page
+    pd_page
   );
-  // autoselect ValList item
-  pageAutoSelect(root_page, idx);
+  // autoselect PD voltage selector
+  pageAutoSelect(pd_page, idx);
 
-  // Vin sensor data as Text
+  // Vin sensor data display
+  auto vin_idx = nextIndex();
   addMuippItem(
-    new MuiItem_U8g2_TextCallBack(u8g2, nextIndex(),
+    new MuiItem_U8g2_TextCallBack(u8g2, vin_idx,
       [&](){ std::ostringstream oss; oss.precision(1); oss << std::fixed << "Vin:" << _vin/1000.0 << "V"; _vin_s = oss.str(); return _vin_s.data(); },
-      MAIN_MENU_FONT3, 0, u8g2.getDisplayHeight(), text_align_t::left, text_align_t::bottom
-      ),
-    root_page
+      MAIN_MENU_FONT3, 0, u8g2.getDisplayHeight(), text_align_t::left, text_align_t::bottom),
+    pd_page
   );
 
   // "Back Button" item
+  auto bb_idx = nextIndex();
   addMuippItem(
-    new MuiItem_U8g2_BackButton(u8g2, nextIndex(), dictionary[D_return], MAIN_MENU_FONT1),
-    root_page
+    new MuiItem_U8g2_BackButton(u8g2, bb_idx, dictionary[D_return], MAIN_MENU_FONT1),
+    pd_page
   );
+
+
+  // **************************************
+  // *****  Page with QC warning text
+  muiItemId qc_warn_page = makePage(dictionary[D_Note_QCWarn], root_page);
+  // add static text with QC warning
+  addMuippItem(
+    new MuiItem_U8g2_StaticText(u8g2, nextIndex(),
+      dictionary[D_Note_QCWarn],
+      SMALL_TEXT_FONT, 0, SMALL_TEXT_FONT_Y_OFFSET),
+    qc_warn_page
+  );
+  // add back button on a warn page, it will lead to the root page
+  addItemToPage(bb_idx, qc_warn_page);
+
+
+  // **************************************
+  // *****  Page  "Power Supply->QC Trigger
+  muiItemId qc_page = makePage(menu_PwrControlOpts.at(1), root_page);
+  // Page Title
+  addItemToPage(ptitle_idx, qc_page);
+
+  // offset counter for row items
+  uint16_t item_y_offset = MENU_LIST_Y_OFFSET;
+
+  // QC mode selector
+  addMuippItem(
+    new MuiItem_U8g2_ValuesList(u8g2, nextIndex(),
+      dictionary[D_QCMode],
+      [&](){ return menu_QCFunctionOpts.at(_qc_mode); },                          // get a string of current QC mode
+      [&](){ _qc_mode_toggle(true); },                                            // next QC mode
+      [&](){ _qc_mode_toggle(false); },                                           // prev QC mode
+      0, u8g2.getDisplayWidth(), item_y_offset,                                   // cursor point
+      PAGE_TITLE_FONT, text_align_t::left, text_align_t::right),                  // justify value to the right
+    qc_page
+  );
+
+  item_y_offset += MAIN_MENU_Y_SHIFT;                                             // shift cursor position
+
+  // QC voltage selector
+  addMuippItem(
+    new MuiItem_U8g2_ValuesList(u8g2, nextIndex(),
+      dictionary[D_QCVoltage],
+      [&](){ _qcv_s = std::to_string(_volts_qc); return _qcv_s.data(); },         // get a string of current QC mode
+      [&](){ _qc_voltage_step(true); },                                           // next available voltage
+      [&](){ _qc_voltage_step(false); },                                          // prev available voltage
+      0, u8g2.getDisplayWidth(), item_y_offset,                                   // cursor point
+      PAGE_TITLE_FONT, text_align_t::left, text_align_t::right),                  // justify value to the right
+    qc_page
+  );
+
+  // Add voltage meter we created previously
+  addItemToPage(vin_idx, qc_page);
+  // add "OK" button that will lead to the warn page
+  addMuippItem(
+    new MuiItem_U8g2_ActionButton(u8g2, nextIndex(),
+      mui_event(mui_event_t::goPageByID, static_cast<muiItemId>(qc_warn_page)),
+      dictionary[D_OK],
+      SMALL_TEXT_FONT, u8g2.getDisplayWidth(), u8g2.getDisplayHeight(), text_align_t::right, text_align_t::bottom),
+    qc_page
+  );
+
 
   // start menu from root page
   menuStart(root_page);
 }
 
-void ViSet_PwrSetup::_next_val(){
+void ViSet_PwrSetup::_pd_next_val(){
   _voption = std::next(_voption);
   if (_voption == _pd_voltage.cend())
     _voption = _pd_voltage.cbegin();
-  _volts = *_voption;
-  EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::pdVoltage), &_volts, sizeof(_volts));
+  _volts_pd = *_voption;
+  EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::pdVoltage), &_volts_pd, sizeof(_volts_pd));
 }
 
-void ViSet_PwrSetup::_prev_val(){
+void ViSet_PwrSetup::_pd_prev_val(){
   if (_voption == _pd_voltage.begin())
     _voption = _pd_voltage.cend();
   _voption = std::prev(_voption);
-  _volts = *_voption;
-  EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::pdVoltage), &_volts, sizeof(_volts));
+  _volts_pd = *_voption;
+  EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::pdVoltage), &_volts_pd, sizeof(_volts_pd));
+}
+
+void ViSet_PwrSetup::_qc_mode_toggle(bool mode){
+  size_t old = _qc_mode;
+
+  if (mode)
+    _qc_mode = ++_qc_mode % menu_QCFunctionOpts.size();
+  else
+    _qc_mode = --_qc_mode % menu_QCFunctionOpts.size();
+
+  // check for QC2 mode voltage
+  /**
+   * if switched to QC2 mode, validate if specified voltage is within available options,
+   * otherwise reset it to default
+   */
+  if (_qc_mode == 2 && _volts_qc != 5 && _volts_qc != 9 && _volts_qc != 12)
+    _volts_qc = 5;
+/*
+  if (_qc_mode)
+    EVT_POST(IRON_SET_EVT, _qc_mode == 1 ? e2int(iron_t::qc3enable) : e2int(iron_t::qc2enable) );
+  else
+    EVT_POST(IRON_SET_EVT, e2int(iron_t::qcDisable) );
+*/
+}
+
+void ViSet_PwrSetup::_qc_voltage_step(bool inc){
+  if (_qc_mode == 2){
+    switch (_volts_qc){
+      case 5 :
+        _volts_qc = inc ? 9 : 12;
+        break;
+      case 9 :
+        _volts_qc = inc ? 12 : 5;
+        break;
+      case 12 :
+        _volts_qc = inc ? 5 : 9;
+        break;
+      default :
+        _volts_qc = 5;
+    }
+  } else{
+    // increment/decrement voltage in steps on one volt
+    _volts_qc = muipp::clamp(inc ? ++_volts_qc : --_volts_qc, (uint32_t)5, (uint32_t)20);
+  }
+  // send volage change cmd
+  EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::qcVoltage), &_volts_qc, sizeof(_volts_qc));
 }
 
 
