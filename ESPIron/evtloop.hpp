@@ -24,6 +24,7 @@ ESP_EVENT_DECLARE_BASE(IRON_GET_EVT);       // ESPIron getter Commands events ba
 ESP_EVENT_DECLARE_BASE(IRON_NOTIFY);        // ESPIron notification events base (those events are published when some state or mode changes due to any commands or component's logic)
 ESP_EVENT_DECLARE_BASE(IRON_STATE);         // ESPIron State publishing events base (those events are published on IRON_GET_EVT requests on demand)
 ESP_EVENT_DECLARE_BASE(IRON_VISET);         // ESPIron VisualSet HID events
+ESP_EVENT_DECLARE_BASE(IRON_HEATER);        // ESPIron heater control events
 
 // cast enum to int
 template <class E>
@@ -48,10 +49,15 @@ enum class iron_t:int32_t {
 
   // Commands
   sensorsReload = 200,      // reload configuration for any sensors available
-  heaterTargetT,            // set heater target temperature, parameter int32_t
   workTemp,                 // set working temperature, parameter int32_t
   workModeToggle,           // toggle working mode on/off
   boostModeToggle,          // toggle boost mode on/off
+
+  // Heater Commands
+  heaterTargetT = 250,      // set heater target temperature, parameter int32_t
+  heaterEnable,
+  heaterDisable,
+  heaterRampUp,             // start PWM ramp heating, switch to enabled mode
 
   reloadTemp,               // reload temperature configuration
   reloadTimeouts,           // reload timeouts configuration
@@ -59,9 +65,9 @@ enum class iron_t:int32_t {
   // Commands - power control
   pdVoltage,                // switch PD trigger, arg uint32_t in V
   qcVoltage,                // switch QC trigger, arg uint32_t in V
-  qc2enable,                // activate QC trigger in QC2 mode
-  qc3enable,                // activate QC trigger in QC3 mode
-  qcDisable,                // disable QC trigger
+//  qc2enable,                // activate QC trigger in QC2 mode
+//  qc3enable,                // activate QC trigger in QC3 mode
+//  qcDisable,                // disable QC trigger
 
   // State notifications
   stateWorking = 300,

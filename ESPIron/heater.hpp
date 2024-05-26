@@ -63,9 +63,6 @@ class TipHeater {
   // 指定变量指针和初始PID调优参数
   FastPID _pid = FastPID(consKp, consKi, consKd, HEATER_MEASURE_RATE);
 
-  // static wrapper for _runner Task to call handling class member
-  static inline void _runner(void* pvParams){ ((TipHeater*)pvParams)->_heaterControl(); }
-
   // events processing
   void _evt_picker(esp_event_base_t base, int32_t id, void* data);
 
@@ -116,6 +113,14 @@ public:
   void disable();
 
   /**
+   * @brief Enable the heater with PWM ramp-up
+   * i.e. it heater will use HW faider to ramp PWM duty from 0 to MAX
+   * to gradualy ramp power load
+   * 
+   */
+  void rampUp();
+
+  /**
    * @brief Set target Tempearture in Celsius
    * 
    * @param t 
@@ -135,5 +140,17 @@ public:
    * @return int32_t 
    */
   int32_t getCurrentTemp() const { return _t.calibrated; }
+
+// other private methods
+private:
+
+// static wrapper for _runner Task to call handling class member
+static inline void _runner(void* pvParams){ ((TipHeater*)pvParams)->_heaterControl(); }
+
+static IRAM_ATTR bool _cb_ledc_fade_end_event(const ledc_cb_param_t *param, void *arg){
+  // do not care what was the event, I need to unblock heater control anyway
+  // if (param->event == LEDC_FADE_END_EVT)
+  return xTaskResumeFromISR(static_cast<TipHeater*>(arg)->_task_hndlr) == pdTRUE;
+}
 
 };

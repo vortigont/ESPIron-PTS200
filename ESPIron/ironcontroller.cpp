@@ -241,9 +241,12 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
           _xTicks.motion = xTaskGetTickCount();
           // notify other components
           LOGI(T_CTRL, println, "switch to working mode");
-          EVT_POST(IRON_NOTIFY, e2int(iron_t::stateWorking));
-          // set heater to working temperature
-          EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::heaterTargetT), &_temp.working, sizeof(_temp.working));
+          // set heater to work temperature
+          EVT_POST_DATA(IRON_HEATER, e2int(iron_t::heaterTargetT), &_temp.working, sizeof(_temp.working));
+          // enable heater
+          EVT_POST(IRON_HEATER, e2int(iron_t::heaterEnable));
+          //EVT_POST(IRON_HEATER, e2int(iron_t::heaterRampUp));
+          EVT_POST(IRON_NOTIFY, e2int(iron_t::stateWorking));     // mode change notification
           break;
 
         case ironState_t::boost :
@@ -254,7 +257,8 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
           _xTicks.idle = xTaskGetTickCount();
           // notify other components
           LOGI(T_CTRL, println, "switch to Idle mode");
-          EVT_POST(IRON_NOTIFY, e2int(iron_t::stateIdle));
+          EVT_POST(IRON_HEATER, e2int(iron_t::heaterDisable));
+          EVT_POST(IRON_NOTIFY, e2int(iron_t::stateIdle));        // mode change notification
           break;
 /*
         // iron was suspended, wake up
@@ -298,7 +302,7 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
       break;
     }
 
-    // direction to switch to idle mode (from HUD menu selector)
+    // direction to switch to idle mode (from HID menu selector)
     case iron_t::stateIdle : {
       // switch to idle mode
       _state = ironState_t::idle;
@@ -306,6 +310,7 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
       _xTicks.idle = xTaskGetTickCount();
       // notify other components
       LOGI(T_CTRL, println, "switch to Idle mode");
+      EVT_POST(IRON_HEATER, e2int(iron_t::heaterDisable));
       EVT_POST(IRON_NOTIFY, e2int(iron_t::stateIdle));
       break;
     }

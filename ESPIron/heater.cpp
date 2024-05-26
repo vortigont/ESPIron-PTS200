@@ -13,14 +13,19 @@
 #endif
 #define HEATER_TASK_NAME          "HEATER"
 
-#define LEDC_MODE       LEDC_LOW_SPEED_MODE             // S2 supports only low speed mode
-#define LEDC_DUTY_RES   HEATER_RES
-#define LEDC_TIMER      LEDC_TIMER_0
-#define LEDC_FREQUENCY  HEATER_FREQ
+#define HEATER_LEDC_SPEEDMODE     LEDC_LOW_SPEED_MODE             // S2 supports only low speed mode
+#define HEATER_LEDC_DUTY_RES      HEATER_RES
+#define HEATER_LEDC_TIMER         LEDC_TIMER_0
+#define HEATER_LEDC_FREQUENCY     HEATER_FREQ
+#define HEATER_LEDC_RAMPUP_TIME   3000                  // time duration to fade in-for PWM ramping, ms
 
 #define HEATER_OPAMP_STABILIZE_MS 5                     // how long to wait after disabling PWM to let OpAmp stabilize
 
 #define HEATER_ADC_SAMPLES        8                     // number of ADC reads to averate tip tempearture
+
+#define PID_ENGAGE_DIFF_LOW       30                    // lower temperature difference when PID algo should be engaged
+#define PID_ENGAGE_DIFF_HIGH      10                    // higher temperature difference when PID algo should be engaged
+
 
 // normal interval between temp measurments
 constexpr TickType_t measure_delay_ticks = pdMS_TO_TICKS(1000 / HEATER_MEASURE_RATE);
@@ -35,12 +40,12 @@ TipHeater::~TipHeater(){
     esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_SET_EVT, ESP_EVENT_ANY_ID, _evt_cmd_handler);
     _evt_cmd_handler = nullptr;
   }
-
+/*
   if (_evt_ntf_handler){
     esp_event_handler_instance_unregister_with(evt::get_hndlr(), IRON_NOTIFY, ESP_EVENT_ANY_ID, _evt_ntf_handler);
     _evt_ntf_handler = nullptr;
   }
-
+*/
   _stop_runner();
 }
 
@@ -54,25 +59,28 @@ void TipHeater::init(){
   if (!_evt_cmd_handler){
     esp_event_handler_instance_register_with(
       evt::get_hndlr(),
-      IRON_SET_EVT,
-      ESP_EVENT_ANY_ID,    // subscribe to 'sensorsReload command'
+      IRON_HEATER,
+      ESP_EVENT_ANY_ID,
       [](void* self, esp_event_base_t base, int32_t id, void* data) { static_cast<TipHeater*>(self)->_evt_picker(base, id, data); },
       this,
       &_evt_cmd_handler
     );
   }
-
+/*
   if (!_evt_ntf_handler){
     esp_event_handler_instance_register_with(
       evt::get_hndlr(),
       IRON_NOTIFY,
-      ESP_EVENT_ANY_ID,    // subscribe to 'sensorsReload command'
+      ESP_EVENT_ANY_ID,
       [](void* self, esp_event_base_t base, int32_t id, void* data) { static_cast<TipHeater*>(self)->_evt_picker(base, id, data); },
       this,
       &_evt_ntf_handler
     );
   }
+*/
 
+  // init HW fader
+  ledc_fade_func_install(0);
   // create RTOS task that controls heater PWM
   _start_runner();
 }
@@ -87,23 +95,32 @@ void TipHeater::_evt_picker(esp_event_base_t base, int32_t id, void* data){
       return;
     }
 
-    case evt::iron_t::stateWorking : {
+    case evt::iron_t::heaterEnable : {
       // enable heater
       enable();
       return;
     }
 
-    case evt::iron_t::stateIdle : {
+    case evt::iron_t::heaterDisable : {
       // disable heater in standby mode
       disable();
       return;
     }
 
+    case evt::iron_t::heaterRampUp : {
+      // disable heater in standby mode
+      rampUp();
+      return;
+    }
+
+/*
+    // obsolete, use deep-sleep in Suspend
     case evt::iron_t::stateSuspend : {
       // disable worker task in standby mode
       _stop_runner();
       return;
     }
+*/
   }
 }
 
@@ -111,10 +128,10 @@ void TipHeater::_evt_picker(esp_event_base_t base, int32_t id, void* data){
 void TipHeater::_start_runner(){
   // Prepare and then apply the LEDC PWM timer configuration
   ledc_timer_config_t ledc_timer = {
-      .speed_mode       = LEDC_MODE,
-      .duty_resolution  = LEDC_DUTY_RES,        
-      .timer_num        = LEDC_TIMER,
-      .freq_hz          = LEDC_FREQUENCY,
+      .speed_mode       = HEATER_LEDC_SPEEDMODE,
+      .duty_resolution  = HEATER_LEDC_DUTY_RES,        
+      .timer_num        = HEATER_LEDC_TIMER,
+      .freq_hz          = HEATER_LEDC_FREQUENCY,
       .clk_cfg          = LEDC_AUTO_CLK
   };
   ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
@@ -122,10 +139,10 @@ void TipHeater::_start_runner(){
   // Prepare and then apply the LEDC PWM channel configuration
   ledc_channel_config_t ledc_channel = {
       .gpio_num       = _pwm.gpio,
-      .speed_mode     = LEDC_MODE,
+      .speed_mode     = HEATER_LEDC_SPEEDMODE,
       .channel        = _pwm.channel,
       .intr_type      = LEDC_INTR_DISABLE,
-      .timer_sel      = LEDC_TIMER,
+      .timer_sel      = HEATER_LEDC_TIMER,
       .duty           = 0,
       .hpoint         = 0,
       .flags          = {.output_invert  = _pwm.invert }
@@ -140,18 +157,28 @@ void TipHeater::_start_runner(){
                           HEATER_TASK_PRIO,
                           &_task_hndlr,
                           tskNO_AFFINITY ) == pdPASS;
+
+  // fader iterrupt handler, it will resume heaterControl task on fade end event
+  ledc_cbs_t fade_callback = { 
+    .fade_cb = TipHeater::_cb_ledc_fade_end_event
+  };
+  // register fader interrupt handler
+  ledc_cb_register(HEATER_LEDC_SPEEDMODE, _pwm.channel, &fade_callback, this);
 }
 
 void TipHeater::_stop_runner(){
   _state = HeaterState_t::shutoff;
-  ledc_stop(LEDC_MODE, _pwm.channel, _pwm.invert);
+  ledc_stop(HEATER_LEDC_SPEEDMODE, _pwm.channel, _pwm.invert);
   if(_task_hndlr)
     vTaskDelete(_task_hndlr);
   _task_hndlr = nullptr;
+
+  // unregister cb interrupt handler
+  ledc_fade_func_uninstall();
 }
 
 void TipHeater::_heaterControl(){
-  TickType_t xLastWakeTime = xTaskGetTickCount ();
+  TickType_t xLastWakeTime = xTaskGetTickCount();
   TickType_t delay_time = measure_delay_ticks;
   for (;;){
     // sleep to accomodate specified measuring rate
@@ -165,12 +192,15 @@ void TipHeater::_heaterControl(){
         delay_time = idle_delay_ticks;
         break;
       case HeaterState_t::active : {
-        if (ledc_get_duty(LEDC_MODE, _pwm.channel)){
+        // use while to avoid concurency issues with hw fader interrupt
+        while (ledc_get_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel)){
           // shut off heater in order to measure temperature 关闭加热器以测量温度
-          ledc_set_duty(LEDC_MODE, _pwm.channel, 0);
-          ledc_update_duty(LEDC_MODE, _pwm.channel);
+          ledc_set_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel, 0);
+          ledc_update_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel);
           // idle while OpAmp stabilizes
           vTaskDelay(pdMS_TO_TICKS(HEATER_OPAMP_STABILIZE_MS));
+          // reset run time (need to avoid extra consecutive runs with xTaskDelayUntil if thread was suspended from the outside)
+          xLastWakeTime = xTaskGetTickCount();
         }
         break;
       }
@@ -189,10 +219,10 @@ void TipHeater::_heaterControl(){
     if (_state != HeaterState_t::notip && t > TEMP_NOTIP){
       // we have just lost connection with a tip sensor
       // disable PWM
-      ledc_set_duty(LEDC_MODE, _pwm.channel, 0);
-      ledc_update_duty(LEDC_MODE, _pwm.channel);
+      ledc_set_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel, 0);
+      ledc_update_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel);
       _state = HeaterState_t::notip;
-      LOGI(T_HEAT, printf, "Iron Tip ejected, T:%d\n", static_cast<int32_t>(t));
+      LOGW(T_HEAT, printf, "Iron Tip ejected, T:%d\n", static_cast<int32_t>(t));
       EVT_POST(SENSOR_DATA, e2int(evt::iron_t::tipEject));
       continue;
     }
@@ -201,7 +231,7 @@ void TipHeater::_heaterControl(){
     if (_state == HeaterState_t::notip && t < TEMP_NOTIP){
       _state = HeaterState_t::inactive;
       EVT_POST(SENSOR_DATA, e2int(evt::iron_t::tipInsert));
-      LOGI(T_HEAT, println, "Iron Tip inserted");
+      LOGW(T_HEAT, println, "Iron Tip inserted");
       continue;
     }
 
@@ -224,24 +254,23 @@ void TipHeater::_heaterControl(){
     // note: this is ugly external function, I will rework it later
     //_t.calibrated = calculateTemp(_t.avg);
     _t.calibrated = _t.avg;
-    LOGV(T_HEAT, printf, "avg T: %5.1f, calibrated T: %d\n", _t.avg, _t.calibrated);
+    ADC_LOGD(printf, "avg T: %5.1f, cal T: %d, tgt T:%d\n", _t.avg, _t.calibrated, _t.target);
     EVT_POST_DATA(SENSOR_DATA, e2int(evt::iron_t::tiptemp), &_t.calibrated, sizeof(_t.calibrated));
 
-    auto diff = abs(_t.target - _t.calibrated);
     // if PID algo should be engaged
-    if (diff < PID_ENGAGE_DIFF){
+    if (_t.calibrated > (_t.target - PID_ENGAGE_DIFF_LOW) && _t.calibrated < (_t.target + PID_ENGAGE_DIFF_HIGH)){
       _pwm.duty = _pid.step(_t.target, _t.calibrated);
       delay_time = measure_delay_ticks;
     } else {
-      // heater must be either turned on or off
+      // heater must be either turned full on or off
       _pwm.duty = _t.calibrated < _t.target ? 1<<HEATER_RES : 0;
       _pid.clear();   // reset pid algo
       // give heater more time to gain/loose temperature
       delay_time = long_measure_delay_ticks;
     }
 
-    ledc_set_duty(LEDC_MODE, _pwm.channel,  _pwm.duty);
-    ledc_update_duty(LEDC_MODE, _pwm.channel);
+    ledc_set_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel,  _pwm.duty);
+    ledc_update_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel);
     PWM_LOGV(printf, "Duty:%u\n",  _pwm.duty);
   }
   // Task must self-terminate (if ever)
@@ -265,20 +294,35 @@ void TipHeater::enable(){
       return;
   }
 
-  LOGI(T_HEAT, printf, "Enabling, target T:%d\n", _t.target);
+  LOGI(T_HEAT, printf, "Enable, target T:%d\n", _t.target);
 };
 
 void TipHeater::disable(){
   switch (_state){
     case HeaterState_t::active :
-      ledc_set_duty(LEDC_MODE, _pwm.channel, 0);
-      ledc_update_duty(LEDC_MODE, _pwm.channel);
+      ledc_set_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel, 0);
+      ledc_update_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel);
       _state = HeaterState_t::inactive;
-      LOGI(T_PWM, println, "Disable heater");
+      LOGI(T_PWM, println, "Disable");
       break;
     // in all other cases this call could be ignored
   }
 }
+
+void TipHeater::rampUp(){
+  // can only ramp-up from inactive state
+  if (_state != HeaterState_t::inactive) return;
+
+  // first suspend heaterControl task for the duration of fade-in, 'cause no changes to PWM duty could be made for that period,
+  // fader interrupt will resume it
+  vTaskSuspend( _task_hndlr );
+  // initiate HW fader
+  ledc_set_fade_time_and_start(HEATER_LEDC_SPEEDMODE, _pwm.channel, 1<<HEATER_RES, HEATER_LEDC_RAMPUP_TIME, LEDC_FADE_NO_WAIT);
+  // from now on consider heater in active state
+  _state = HeaterState_t::active;
+}
+
+
 
 // 对32个ADC读数进行平均以降噪
 //  VP+_Ru = 100k, Rd_GND = 1K
