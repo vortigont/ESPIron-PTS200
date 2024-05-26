@@ -16,6 +16,7 @@
 // helper macro to reduce typing
 #define EVT_POST(event_base, event_id) esp_event_post_to(evt::get_hndlr(), event_base, event_id, NULL, 0, portMAX_DELAY)
 #define EVT_POST_DATA(event_base, event_id, event_data, data_size) esp_event_post_to(evt::get_hndlr(), event_base, event_id, event_data, data_size, portMAX_DELAY)
+#define EVT_POST_ISR(event_base, event_id, tsk_awoken) esp_event_isr_post_to(evt::get_hndlr(), event_base, event_id, NULL, 0, tsk_awoken)
 
 // ESP32 event loop defines
 ESP_EVENT_DECLARE_BASE(SENSOR_DATA);        // events coming from different sensors, i.e. temperature, voltage, orientation, etc...
@@ -61,6 +62,8 @@ enum class iron_t:int32_t {
 
   reloadTemp,               // reload temperature configuration
   reloadTimeouts,           // reload timeouts configuration
+  enablePWMRamp,            // PWM ramping on
+  disablePWMRamp,           // PWM ramping off
 
   // Commands - power control
   pdVoltage,                // switch PD trigger, arg uint32_t in V
@@ -78,6 +81,8 @@ enum class iron_t:int32_t {
   stateBoost,               // iron controller switched to 'Boost' mode, parameter uint32_t - seconds left to disable boost mode
   stateSetup,               // enter in menu confgiration mode
   stateNoTip,
+  statePWRRampStart,        // Iron has started power ramping
+  statePWRRampCmplt,        // Iron has completed power ramping
   tipEject,                 // sent by heater when it looses the tip sense
   tipInsert,                // sent by heater when detect tip sensor
 

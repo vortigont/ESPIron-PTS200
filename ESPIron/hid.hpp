@@ -326,6 +326,8 @@ class ViSet_PwrSetup : public MuiMenu {
   // selected QC mode (index for menu_QCFunctionOpts array)
   uint32_t _qc_mode{0};
 
+  bool _pwm_ramp{false};
+
   // containters for string data that will be printed on-screen
   // selected PD/QC voltage
   std::string _pdv_s, _qcv_s;

@@ -44,6 +44,9 @@ class IronController {
   // working voltage, set default to 20v to let PD trigger select if no value set in NVS
   uint32_t _voltage{20};
 
+  // Use PWM power ramping
+  bool _pwm_ramp{false};
+
   // Mode Switcher timer
   TimerHandle_t _tmr_mode = nullptr;
 

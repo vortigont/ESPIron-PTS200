@@ -147,10 +147,6 @@ private:
 // static wrapper for _runner Task to call handling class member
 static inline void _runner(void* pvParams){ ((TipHeater*)pvParams)->_heaterControl(); }
 
-static IRAM_ATTR bool _cb_ledc_fade_end_event(const ledc_cb_param_t *param, void *arg){
-  // do not care what was the event, I need to unblock heater control anyway
-  // if (param->event == LEDC_FADE_END_EVT)
-  return xTaskResumeFromISR(static_cast<TipHeater*>(arg)->_task_hndlr) == pdTRUE;
-}
+static IRAM_ATTR bool _cb_ledc_fade_end_event(const ledc_cb_param_t *param, void *arg);
 
 };

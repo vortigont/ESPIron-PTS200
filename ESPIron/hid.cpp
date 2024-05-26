@@ -356,16 +356,19 @@ void ViSet_MainScreen::drawScreen(){
       u8g2.print(dictionary[D_idle]);
       break;
     case ironState_t::working :
-      u8g2.print(dictionary[D_heating]);
+      u8g2.print(dictionary[D_Heating]);
       break;
     case ironState_t::standby :
-      u8g2.print(dictionary[D_standby]);
+      u8g2.print(dictionary[D_Standby]);
       break;
     case ironState_t::boost :
-      u8g2.print(dictionary[D_boost]);
+      u8g2.print(dictionary[D_Boost]);
       break;
     case ironState_t::notip :
-      u8g2.print(dictionary[D_notip]);
+      u8g2.print(dictionary[D_NoTip]);
+      break;
+    case ironState_t::ramping :
+      u8g2.print(dictionary[D_Ramping]);
       break;
 
     default:;
@@ -468,16 +471,22 @@ void ViSet_MainScreen::_evt_notify(int32_t id, void* data){
   switch(static_cast<evt::iron_t>(id)){
     case evt::iron_t::stateIdle :
       _state = ironState_t::idle;
-    break;
+      break;
     case evt::iron_t::stateWorking :
       _state = ironState_t::working;
-    break;
+      break;
     case evt::iron_t::stateStandby :
       _state = ironState_t::standby;
-    break;
+      break;
     case evt::iron_t::stateBoost :
       _state = ironState_t::boost;
-    break;
+      break;
+    case evt::iron_t::statePWRRampStart :
+      _state = ironState_t::ramping;
+      break;
+    case evt::iron_t::statePWRRampCmplt :
+      _state = ironState_t::working;
+      break;
   }
 }
 
@@ -982,13 +991,14 @@ ViSet_PwrSetup::ViSet_PwrSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryE
   // go back to prev viset on exit
   parentvs = viset_evt_t::goBack;
 
-  // load PD voltage values from NVS
+  // load settings values from NVS
   esp_err_t err;
   std::unique_ptr<nvs::NVSHandle> handle = nvs::open_nvs_handle(T_IRON, NVS_READONLY, &err);
   if (err == ESP_OK) {
     handle->get_item(T_pdVolts, _volts_pd);
     handle->get_item(T_qcVolts, _volts_qc);
     handle->get_item(T_qcMode, _qc_mode);
+    handle->get_item(T_PWMRamp, _pwm_ramp);
   }
 
   // set our iterator to selected voltage option
@@ -1019,7 +1029,11 @@ ViSet_PwrSetup::~ViSet_PwrSetup(){
     handle->set_item(T_pdVolts, _volts_pd);
     handle->set_item(T_qcVolts, _volts_qc);
     handle->set_item(T_qcMode, _qc_mode);
+    handle->set_item(T_PWMRamp, _pwm_ramp);
   }
+
+  // command for PWM ramping
+  EVT_POST(IRON_SET_EVT, _pwm_ramp ? e2int(iron_t::enablePWMRamp) : e2int(iron_t::disablePWMRamp) );
 }
 
 void ViSet_PwrSetup::_buildMenu(){
@@ -1151,6 +1165,30 @@ void ViSet_PwrSetup::_buildMenu(){
       SMALL_TEXT_FONT, u8g2.getDisplayWidth(), u8g2.getDisplayHeight(), text_align_t::right, text_align_t::bottom),
     qc_page
   );
+
+
+  // **************************************
+  // *****  Page  "Power Supply->PWM Ramp
+  muiItemId pwmramp_page = makePage(menu_PwrControlOpts.at(2), root_page);
+
+  // Page Title
+  addItemToPage(ptitle_idx, pwmramp_page);
+
+  // create checkbox item
+  addMuippItem(
+    new MuiItem_U8g2_CheckBox(u8g2, nextIndex(), dictionary[D_PwrRamp_label], _pwm_ramp, [&](size_t idx){ _pwm_ramp = idx; }, PAGE_TITLE_FONT, 0, SMALL_TEXT_FONT_Y_OFFSET+PAGE_TITLE_FONT_Y_OFFSET),
+    pwmramp_page
+  );
+
+  // create text hint
+  addMuippItem(
+    new MuiItem_U8g2_StaticText(u8g2, nextIndex(), dictionary[D_PwrRamp_hint], SMALL_TEXT_FONT, 0, 2*SMALL_TEXT_FONT_Y_OFFSET + PAGE_TITLE_FONT_Y_OFFSET),
+    pwmramp_page
+  );
+
+  // add back button on a warn page, it will lead to the root page
+  addItemToPage(bb_idx, pwmramp_page);
+
 
 
   // start menu from root page

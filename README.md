@@ -61,6 +61,7 @@ Menu navigation demo capture.
 | :floppy_disk: (optionaly) save/restore last used temperature | :white_check_mark: done |
 | PD Configuration | :white_check_mark: done |
 | QC2/QC3 trigger | :white_check_mark: done (experimental) |
+| :mountain_cableway: PWM Power ramping | :white_check_mark: done |
 | :straight_ruler: Tip calibration | :x: Planned |
 | :memo: Tip profiles | :x: Planned |
 | :wavy_dash: Power profile | :x: Planned |

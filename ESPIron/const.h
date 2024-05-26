@@ -23,3 +23,4 @@ static constexpr const char* T_motionThr = "motionThr";                 // motio
 static constexpr const char* T_pdVolts = "pdVolts";                     // PD trigger voltage
 static constexpr const char* T_qcVolts = "qcVolts";                     // QC trigger voltage
 static constexpr const char* T_qcMode = "qcMode";                       // QC Mode
+static constexpr const char* T_PWMRamp = "PWMRamp";                     // PWM Power ramping

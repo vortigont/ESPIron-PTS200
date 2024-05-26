@@ -2,7 +2,7 @@
 #include "const.h"
 #include "evtloop.hpp"
 #include "heater.hpp"
-#include "main.h"
+//#include "main.h"
 #include "log.h"
 
 #define HEATER_TASK_PRIO          tskIDLE_PRIORITY+1    // task priority
@@ -322,6 +322,16 @@ void TipHeater::rampUp(){
   _state = HeaterState_t::active;
 }
 
+bool TipHeater::_cb_ledc_fade_end_event(const ledc_cb_param_t *param, void *arg){
+  // do not care what was the event, I need to unblock heater control anyway
+  // if (param->event == LEDC_FADE_END_EVT)
+
+  BaseType_t task_awoken;
+  // notify that rampUp has been complete
+  EVT_POST_ISR(IRON_NOTIFY, e2int(evt::iron_t::statePWRRampCmplt), &task_awoken);
+  task_awoken |= xTaskResumeFromISR(static_cast<TipHeater*>(arg)->_task_hndlr);
+  return task_awoken;
+}
 
 
 // 对32个ADC读数进行平均以降噪

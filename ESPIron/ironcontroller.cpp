@@ -116,6 +116,9 @@ void IronController::init(){
 
   if (err != ESP_OK) return;
 
+  // restore PWM Ramping option
+  handle->get_item(T_PWMRamp, _pwm_ramp);
+
   // init PD trigger
   handle->get_item(T_pdVolts, _voltage);
   _pd_trigger_init();
@@ -243,10 +246,9 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
           LOGI(T_CTRL, println, "switch to working mode");
           // set heater to work temperature
           EVT_POST_DATA(IRON_HEATER, e2int(iron_t::heaterTargetT), &_temp.working, sizeof(_temp.working));
-          // enable heater
-          EVT_POST(IRON_HEATER, e2int(iron_t::heaterEnable));
-          //EVT_POST(IRON_HEATER, e2int(iron_t::heaterRampUp));
-          EVT_POST(IRON_NOTIFY, e2int(iron_t::stateWorking));     // mode change notification
+          // enable heater either with PWM ramping or plain
+          EVT_POST(IRON_HEATER, _pwm_ramp ? e2int(iron_t::heaterRampUp) : e2int(iron_t::heaterEnable));
+          EVT_POST(IRON_NOTIFY, _pwm_ramp ? e2int(iron_t::statePWRRampStart) : e2int(iron_t::stateWorking));     // mode change notification
           break;
 
         case ironState_t::boost :
@@ -356,6 +358,15 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
     // adjust QC trigger voltage (arrive from HID)
     case evt::iron_t::qcVoltage :
       if(_qc) _qc->setQCV (*reinterpret_cast<uint32_t*>(data));
+      break;
+
+    // PWM ramp control
+    case evt::iron_t::enablePWMRamp :
+      _pwm_ramp = true;
+      break;
+
+    case evt::iron_t::disablePWMRamp :
+      _pwm_ramp = false;
       break;
 
 /*
