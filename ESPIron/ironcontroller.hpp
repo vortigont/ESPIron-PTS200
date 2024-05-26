@@ -15,6 +15,11 @@
 #include "const.h"
 #include "nvs.hpp"
 #include "freertos/timers.h"
+#include <QC3Control.h>
+
+// forward declaration
+class QC3ControlWA;
+
 
 /**
  * @brief An object that represents Iron states and configuration
@@ -36,8 +41,8 @@ class IronController {
   // current iron mode
   ironState_t _state{ironState_t::idle};
 
-  // working voltage
-  uint32_t _voltage{5};
+  // working voltage, set default to 20v to let PD trigger select if no value set in NVS
+  uint32_t _voltage{20};
 
   // Mode Switcher timer
   TimerHandle_t _tmr_mode = nullptr;
@@ -50,6 +55,9 @@ class IronController {
 
   // request commands events handler
   esp_event_handler_instance_t _evt_req_handler = nullptr;
+
+  // QC Trigger
+  std::unique_ptr<QC3ControlWA> _qc;
 
   /**
    * @brief timer callback that watches mode switching
@@ -71,8 +79,13 @@ class IronController {
   void _evt_reqs(esp_event_base_t base, int32_t id, void* data);
 
 public:
+  //IronController() : _qcc(QC_DP_PIN, QC_DM_PIN) {}
   ~IronController();
 
+  /**
+   * @brief Initialize Iron controller
+   * 
+   */
   void init();
 
 
@@ -113,3 +126,25 @@ private:
    */
   void _pd_trigger_init();
 };
+
+/**
+ * @brief a wrapper class for QCControl
+ * it makes long blocking operations with QC asynchronous
+ * and uses different call methods for QC2/QC3
+ * 
+ */
+class QC3ControlWA : public QC3Control {
+
+  // Delay Switcher timer
+  TimerHandle_t _tmr_mode;
+  uint32_t qc_mode, qcv, pending_qcv{0};
+
+  void _start();
+
+public:
+  QC3ControlWA(uint32_t mode, uint32_t voltage);
+  virtual ~QC3ControlWA();
+
+  void setQCV(uint32_t V);
+};
+

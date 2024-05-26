@@ -17,6 +17,7 @@
 #include "log.h"
 #include "Arduino.h"        // needed for Serial
 
+
 #define MODE_TIMER_PERIOD   1000
 #define DEEPSLEEP_DELAY     3000
 
@@ -66,30 +67,19 @@ IronController::~IronController(){
     _evt_req_handler = nullptr;
   }
 
-  if (_tmr_mode)
+  if (_tmr_mode){
     xTimerStop(_tmr_mode, portMAX_DELAY );
+    xTimerDelete(_tmr_mode, portMAX_DELAY );
+  }
 
 }
 
 void IronController::init(){
-  esp_err_t err;
-  std::unique_ptr<nvs::NVSHandle> handle = nvs::open_nvs_handle(T_IRON, NVS_READONLY, &err);
-
-  if (err == ESP_OK) {
-    handle->get_item(T_pdVolts, _voltage);
-  }
-
-  // init PD gpios
-  _pd_trigger_init();
-  _pd_trigger(_voltage);
-
   // load timeout values from NVS
   nvs_blob_read(T_IRON, T_timeouts, static_cast<void*>(&_timeout), sizeof(IronTimeouts));
 
   // load temperature values from NVS
   nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
-
-
 
   // if we are not saving working temp, then use default one instead
   if (!_temp.savewrk)
@@ -119,6 +109,25 @@ void IronController::init(){
   if (!_evt_req_handler){
     ESP_ERROR_CHECK(esp_event_handler_instance_register_with(evt::get_hndlr(), IRON_GET_EVT, ESP_EVENT_ANY_ID, IronController::_event_hndlr, this, &_evt_req_handler));
   }
+
+
+  esp_err_t err;
+  std::unique_ptr<nvs::NVSHandle> handle = nvs::open_nvs_handle(T_IRON, NVS_READONLY, &err);
+
+  if (err != ESP_OK) return;
+
+  // init PD trigger
+  handle->get_item(T_pdVolts, _voltage);
+  _pd_trigger_init();
+  _pd_trigger(_voltage);
+
+  // init QC trigger
+  uint32_t qc_mode{0}, qcv{12};
+  handle->get_item(T_qcMode, qc_mode);
+  handle->get_item(T_qcVolts, qcv);
+
+  if (qc_mode)
+    _qc = std::make_unique<QC3ControlWA>(qc_mode, qcv);
 }
 
 void IronController::_mode_switcher(){
@@ -289,6 +298,18 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
       break;
     }
 
+    // direction to switch to idle mode (from HUD menu selector)
+    case iron_t::stateIdle : {
+      // switch to idle mode
+      _state = ironState_t::idle;
+      // reset idle timer
+      _xTicks.idle = xTaskGetTickCount();
+      // notify other components
+      LOGI(T_CTRL, println, "switch to Idle mode");
+      EVT_POST(IRON_NOTIFY, e2int(iron_t::stateIdle));
+      break;
+    }
+
     // set work temperature (arrive from HID)
     case evt::iron_t::workTemp : {
       int32_t t = *reinterpret_cast<int32_t*>(data);
@@ -326,6 +347,24 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
     case evt::iron_t::pdVoltage :
       _pd_trigger(*reinterpret_cast<int32_t*>(data));
       break;
+
+    // adjust QC trigger voltage (arrive from HID)
+    case evt::iron_t::qcVoltage :
+      if(_qc) _qc->setQCV (*reinterpret_cast<uint32_t*>(data));
+      break;
+
+/*
+    // switch QC trigger modes
+    case evt::iron_t::qcDisable :
+      _qc_trigger_init(0);
+      break;
+    case evt::iron_t::qc3enable :
+      _qc_trigger_init(1);
+      break;
+    case evt::iron_t::qc2enable :
+      _qc_trigger_init(2);
+      break;
+*/
     // some
   }
 
@@ -380,5 +419,53 @@ void IronController::_pd_trigger(uint32_t voltage){
     // PD trigger with default 5 volts
     default:
       gpio_set_level(PD_CFG_1, HIGH);
+  }
+}
+
+
+
+QC3ControlWA::QC3ControlWA(uint32_t mode, uint32_t voltage) : QC3Control(QC_DP_PIN, QC_DM_PIN), qc_mode(mode), qcv(voltage) {
+  uint32_t wait_time = QC_T_GLITCH_BC_DONE_MS + 100;  // without this extra 100ms some PSUs does not work properly
+  // for QC2 mode increase wait time twice, those powerbanks I have in my posession needs much more significant delay
+  if (qc_mode == 2) wait_time += QC_T_GLITCH_BC_DONE_MS;
+  _tmr_mode = xTimerCreate("QC",
+                            pdMS_TO_TICKS(wait_time),
+                            pdFALSE,
+                            static_cast<void*>(this),
+                            [](TimerHandle_t h) { static_cast<QC3ControlWA*>(pvTimerGetTimerID(h))->_start(); }
+                          );
+  if (_tmr_mode)
+    xTimerStart( _tmr_mode, portMAX_DELAY );
+}
+
+QC3ControlWA::~QC3ControlWA(){
+  xTimerStop(_tmr_mode, portMAX_DELAY);
+  xTimerDelete(_tmr_mode, portMAX_DELAY);
+}
+
+void QC3ControlWA::_start(){
+  if (pending_qcv){
+    // it's a delayed QC2 switch
+    setVoltage(pending_qcv);
+    pending_qcv = 0;
+  } else {
+    // start QC in mode 3 or 2
+    begin(qc_mode == 1);
+    setQCV(qcv);
+  }
+}
+
+void QC3ControlWA::setQCV(uint32_t V){
+  //LOGD(T_CTRL, print, "set QC volts:\n");
+  //_qc->setMilliVoltage(volt*1000);
+  if (qc_mode == 1)
+    setMilliVoltage(V*1000);
+  else {
+    set5V();
+    // somehow those powerbanks I have in my posession needs significant delay between switching to 5v and next to desired voltage to operate properly
+    // have no idea where it comes from, but let's make it at least non-blocking operation
+    pending_qcv = V;
+    xTimerChangePeriod(_tmr_mode, pdMS_TO_TICKS(1500), portMAX_DELAY);
+    xTimerReset(_tmr_mode, portMAX_DELAY);
   }
 }

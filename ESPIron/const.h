@@ -21,3 +21,5 @@ static constexpr const char* T_timeouts = "timeouts";                   // blob 
 static constexpr const char* T_temperatures = "temperatures";           // blob with temperature values
 static constexpr const char* T_motionThr = "motionThr";                 // motion threshold (uint32)
 static constexpr const char* T_pdVolts = "pdVolts";                     // PD trigger voltage
+static constexpr const char* T_qcVolts = "qcVolts";                     // QC trigger voltage
+static constexpr const char* T_qcMode = "qcMode";                       // QC Mode

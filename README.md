@@ -15,14 +15,14 @@ Telegram group [LampDevs](https://t.me/LampDevs) (Russian)
 
 WIP:
  - decomposite project into independent tasks and RTOS threads
- - use full-range PWM for heater
- - enabled PID control for PWM (not optimized yet)
  - revised temperture probes scheduling
  - exclude useless tight loops
  - removed ALL blocking code, wiped arduino's `loop()` hooks, now all code is asynchronous
  - rework UI into non-blocking event based configuration system
  - Move configuration data to NVS key/value storage
  - Reimplemented temperature and timers configuration
+ - use full-range PWM for heater
+ - enabled PID control for PWM (not optimized yet)
 
 
 ### Key controls
@@ -50,7 +50,7 @@ Menu navigation demo capture.
 
 
 ### Features implementation progress
-
+<!-- https://gist.github.com/rxaviers/7360908 -->
 | Function | Status |
 |-|-|
 | standby timer | :white_check_mark: done |
@@ -59,21 +59,41 @@ Menu navigation demo capture.
 | :hotsprings: Temperature control | :white_check_mark: done |
 | :rocket: boost mode | :white_check_mark: done |
 | :floppy_disk: (optionaly) save/restore last used temperature | :white_check_mark: done |
-| PD voltage setup | :white_check_mark: done |
-| Tip calibration | :x: Planned |
-| Tip profiles | :x: Planned |
-| QC Configuration | :x: Planned |
-| Power profile | :x: Planned |
-| Power budget | :x: Planned |
-| PID profiles | :x: Planned |
+| PD Configuration | :white_check_mark: done |
+| QC2/QC3 trigger | :white_check_mark: done (experimental) |
+| :straight_ruler: Tip calibration | :x: Planned |
+| :memo: Tip profiles | :x: Planned |
+| :wavy_dash: Power profile | :x: Planned |
+| :electric_plug: Power budget | :x: Planned |
+| :part_alternation_mark: PID profiles | :x: Planned |
 | PID tuning | :x: Planned |
 
 
+### Features
+
+### QC Trigger
+QC trigger is an experimental feature. Since QC trigger uses same lines as USB data, those function co-exist pretty bad together. Due to lack of design schematics and documentaion it is diffecult to implement it properly. When QC is activated __no other__ USB operation is possible, __including firmware download__! It also affects system message output to `Serial` line which migh result in UI slownes or freezes.
+
+> [!NOTE]
+> Do **not** acticate QC-trigger on permanent basis! Do this only when no other PD sources are available and you need to work with USB Type-A powerbanks, or PSUs. Disable it when not needed in configuration menu. On each QC mode change it is required to unplug/replug the Iron!
+
+
+<!-- 构建方法 -->
+## Build method
+Use [PlatformIO](https://platformio.org/) to build the project.
+Attach the iron to USB port and run `pio run -t upload` in project's directory. See [Update Guide](/docs/update_guide.md) for details.
+
+
+==========
+## HW Details
 
 
 #### Schematics
-Iron [Schematics](/docs/PTS200_Schematic_2022-07-10.pdf) (probably from similar iron, some items does not match with PTS-200)
+Iron [Schematics](/docs/PTS200_Schematic_2022-07-10.pdf) (probably from similar iron, some items does not match with PTS-200 v2)
 
+#### Disassembly
+
+Unscrewing - [link](https://github.com/Eddddddddy/Songguo-PTS200/issues/22)
 
 
 
@@ -102,7 +122,3 @@ Iron [Schematics](/docs/PTS200_Schematic_2022-07-10.pdf) (probably from similar 
 <!-- 带有便携式的尖端保护盖 -->
 12. With a portable tip cap
 
-<!-- 构建方法 -->
-## Build method
-Use [PlatformIO](https://platformio.org/) to build the project.
-Attach the iron to USB port and run `pio run -t upload` in project's directory.

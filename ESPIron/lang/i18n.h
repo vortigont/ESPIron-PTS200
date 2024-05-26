@@ -16,6 +16,7 @@
 #define MENU_MAIN_CFG_SIZE          6
 #define MENU_TEMPERATURE_CFG_SIZE   5
 #define MENU_TIMEOUTS_CFG_SIZE      5
+#define MENU_PWR_CONTROL_CFG_SIZE   3
 
 /*
 // List of available translations
@@ -30,23 +31,30 @@ enum lang_index : uint32_t {
 
 /**
  * Text-Dictionary Enums for language resources
- * the order of enums must match with elements in dictionary array
+ * the order of enums MUST match with elements in dictionary array
  */
 enum dict_index {
     D_boost = (0),
     D_error,
+    D_Disabled,
     D_heating,
     D_idle,
     D_min,
+    D_none,
     D_notip,
+    D_OK,
     D_return,
     D_PDVoltage,
+    D_QCMode,
+    D_QCVoltage,
     D_sec,
     D_SaveLast_box,
     D_SaveLast_hint,
     D_Settings,
     D_set_t,
     D_standby,
+// Notes goes below
+    D_Note_QCWarn,
     D_Temp_SaveLastWrkDescr,
     DICT___SIZE
 };

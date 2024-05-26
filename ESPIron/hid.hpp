@@ -318,11 +318,17 @@ class ViSet_PwrSetup : public MuiMenu {
   static constexpr std::array<uint32_t, 5> _pd_voltage = {5, 9, 12, 15, 20};
   std::array<uint32_t, 5>::const_iterator _voption;
 
-  uint32_t _volts{5}, _vin{5};
+  // selected PD/QC voltage
+  uint32_t _volts_pd{5};
+  uint32_t _volts_qc{5};
+  // current Vin voltage from sensor
+  uint32_t _vin{5};
+  // selected QC mode (index for menu_QCFunctionOpts array)
+  uint32_t _qc_mode{0};
 
   // containters for string data that will be printed on-screen
-  // selected PD voltage
-  std::string _pdv_s;
+  // selected PD/QC voltage
+  std::string _pdv_s, _qcv_s;
   // curent Vin value from a sensor
   std::string _vin_s;
 
@@ -332,10 +338,16 @@ class ViSet_PwrSetup : public MuiMenu {
   void _buildMenu();
 
   // option list switch to prev
-  void _prev_val();
+  void _pd_prev_val();
 
   // option list switch to next
-  void _next_val();
+  void _pd_next_val();
+
+  // switch QC mode next/prev
+  void _qc_mode_toggle(bool mode);
+
+  // step qc voltage value plus/minus
+  void _qc_voltage_step(bool inc);
 
 public:
   // c-tor
