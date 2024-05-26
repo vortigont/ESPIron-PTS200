@@ -16,7 +16,7 @@
 #define MENU_MAIN_CFG_SIZE          6
 #define MENU_TEMPERATURE_CFG_SIZE   5
 #define MENU_TIMEOUTS_CFG_SIZE      5
-#define MENU_PWR_CONTROL_CFG_SIZE   3
+#define MENU_PWR_CONTROL_CFG_SIZE   4
 
 /*
 // List of available translations
@@ -34,15 +34,18 @@ enum lang_index : uint32_t {
  * the order of enums MUST match with elements in dictionary array
  */
 enum dict_index {
-    D_boost = (0),
-    D_error,
+    D_Boost = (0),
+    D_Error,
     D_Disabled,
-    D_heating,
+    D_Heating,
     D_idle,
     D_min,
     D_none,
-    D_notip,
+    D_NoTip,
     D_OK,
+    D_Ramping,
+    D_PwrRamp_label,
+    D_PwrRamp_hint,
     D_return,
     D_PDVoltage,
     D_QCMode,
@@ -52,7 +55,7 @@ enum dict_index {
     D_SaveLast_hint,
     D_Settings,
     D_set_t,
-    D_standby,
+    D_Standby,
 // Notes goes below
     D_Note_QCWarn,
     D_Temp_SaveLastWrkDescr,

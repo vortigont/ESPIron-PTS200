@@ -68,6 +68,12 @@ static constexpr const char* S_E = "E: ";
 #endif
 
 // Per app macros
+#if defined(ADC_DEBUG_LEVEL) && ADC_DEBUG_LEVEL > 3
+	#define ADC_LOGD(func, ...) PTS200_DEBUG_PORT.print(S_D); PTS200_DEBUG_PORT.print(T_ADC); PTS200_DEBUG_PORT.print((char)0x9); PTS200_DEBUG_PORT.func(__VA_ARGS__)
+#else
+	#define ADC_LOGD(...)
+#endif
+
 #if defined(ADC_DEBUG_LEVEL) && ADC_DEBUG_LEVEL == 5
 	#define ADC_LOGV(func, ...) PTS200_DEBUG_PORT.print(S_V); PTS200_DEBUG_PORT.print(T_ADC); PTS200_DEBUG_PORT.print((char)0x9); PTS200_DEBUG_PORT.func(__VA_ARGS__)
 #else

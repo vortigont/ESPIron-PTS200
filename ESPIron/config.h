@@ -43,7 +43,7 @@
 #define TEMP_MIN          150   // 最小温度
 #define TEMP_MAX          450   // 最大温度
 #define TEMP_STEP         5     // temperature change step / 旋转编码器温度变化步进
-#define TEMP_NOTIP        500   // virtual temperature threshold when tip is not installed
+#define TEMP_NOTIP        500   // virtual temperature threshold when tip is not installed (op amp max ~650 C)
 #define TEMP_STANDBY      120   // 休眠温度
 #define TEMP_STANDBY_MIN  100
 #define TEMP_STANDBY_MAX  180
@@ -52,10 +52,6 @@
 #define TEMP_BOOST_MIN    30
 #define TEMP_BOOST_MAX    100
 #define TEMP_BOOST_STEP   10
-
-#define POWER_LIMIT_15    170   // 功率限制
-#define POWER_LIMIT_20    255   // 功率限制
-#define POWER_LIMIT_20_2  127   // 功率限制
 
 // Default tip temperature calibration value / 默认的T12烙铁头温度校准值
 #define TEMP200           200   // temperature at ADC = 200 
@@ -89,12 +85,8 @@
 #define WAKEUP_THRESHOLD        10
 
 // Control values
-#define TIME2SETTLE       5000  // The time in microseconds allowed for the OpAmp output to stabilize / 以微秒为单位的时间允许OpAmp输出稳定
-#define TIME2SETTLE_20V   2000  // The time in microseconds allowed for the OpAmp output to stabilize / 以微秒为单位的时间允许OpAmp输出稳定
-#define SMOOTHIE          0.2   // OpAmp output smoothing coefficient (1=no smoothing; default: 0.05) / OpAmp输出平滑系数 (1=无平滑; 默认：0.05)
-//#define PID_ENABLE        true  // enable PID control
-#define PID_ENGAGE_DIFF   30    // temperature difference when PID algo should be engaged
-#define BEEP_ENABLE       true  // enable/disable buzzer
+#define SMOOTHIE                0.2         // OpAmp output smoothing coefficient (1=no smoothing; default: 0.05) / OpAmp输出平滑系数 (1=无平滑; 默认：0.05)
+#define BEEP_ENABLE             true        // enable/disable buzzer
 
 
 // MOSFET control definitions

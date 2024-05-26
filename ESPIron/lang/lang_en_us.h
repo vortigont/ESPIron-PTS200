@@ -30,6 +30,7 @@
 
 // 11x15    nice bold font
 #define PAGE_TITLE_FONT             u8g2_font_bauhaus2015_tr
+#define PAGE_TITLE_FONT_Y_OFFSET    15
 
 // 12x16 wrong? small gothic font
 #define PAGE_TITLE_FONT_SMALL       u8g2_font_glasstown_nbp_t_all
@@ -60,22 +61,25 @@
 // EN-US
 namespace lang_en_us {
 
-// EN US
+// Iron Modes (On main screen)
+static constexpr const char* T_Idle         = "Idle";               // state display
+static constexpr const char* T_Heating      = "Heating";            // state display
+static constexpr const char* T_Standby      = "Standby";            // state display in 'Standby'
 static constexpr const char* T_Boost        = "Boost";              // state display
+static constexpr const char* T_Ramping      = "Ramping!";           // state display power ramp
+static constexpr const char* T_NoTip        = "No tip!";            // state display when tip is missing
+
+// Others
 static constexpr const char* T_Disabled     = "Disabled";           // disabled option
 static constexpr const char* T_Error        = "Error";
-static constexpr const char* T_Heating      = "Heating";            // state display
-static constexpr const char* T_Idle         = "Idle";               // state display
 static constexpr const char* T_min          = "min.";               // short for 'minutes'
 static constexpr const char* T_none         = "none";               // none option
-static constexpr const char* T_NoTip        = "No tip!";            // state display when tip is missing
 static constexpr const char* T_OK           = "OK";                 // OK label/message
 static constexpr const char* T_PDVoltage    = "PD Voltage:";        // PowerDelivery trigger voltage
 static constexpr const char* T_QCMode       = "QC Mode:";           // QC trigger mode
 static constexpr const char* T_QCVoltage    = "QC Voltage:";        // QC trigger voltage
 static constexpr const char* T_sec          = "sec.";               // short for 'seconds'
 static constexpr const char* T_setT         = "Set:";               // Target temperature on main screen
-static constexpr const char* T_standby      = "Standby";            // state display in 'Standby'
 static constexpr const char* T_return       = "<Back";              // return back in menu's
 
 // Menu Page names
@@ -107,15 +111,18 @@ static constexpr const char* T_TimeBoost = "Boost timeout";
 // Power Supply settings menu
 static constexpr const char* T_PwrPD = "PD Trigger";
 static constexpr const char* T_PwrQC = "QC Trigger";
+static constexpr const char* T_PwrRamp = "Power Ramp";
 
 
 //  **** Descriptions and Notes ****
 
 // Temp settings descr
 static constexpr const char* T_Temp_SaveLastWrkDescr = "Save last work Temperature";
-
 // QC feature warning
 static constexpr const char* T_Note_QCWarn = "QC trigger is experimental!!!\nMight work unstable! Do unplug 'n replug the Iron on QC-mode change!";
+// PWM Ramping settings hints
+static constexpr const char* T_PwrRamp_label = "Use PWM Ramp";
+static constexpr const char* T_PwrRamp_hint = "Smooth power-up to prevent PSU protection kick-in";
 
 
 
@@ -136,6 +143,9 @@ static constexpr std::array<const char *, DICT___SIZE> dictionary = {
     lang_en_us::T_none,
     lang_en_us::T_NoTip,
     lang_en_us::T_OK,
+    lang_en_us::T_Ramping,
+    lang_en_us::T_PwrRamp_label,
+    lang_en_us::T_PwrRamp_hint,
     lang_en_us::T_return,
     lang_en_us::T_PDVoltage,
     lang_en_us::T_QCMode,
@@ -145,7 +155,7 @@ static constexpr std::array<const char *, DICT___SIZE> dictionary = {
     lang_en_us::T_SaveLast_hint,
     lang_en_us::T_Settings,
     lang_en_us::T_setT,
-    lang_en_us::T_standby,
+    lang_en_us::T_Standby,
 // Notes goes below
     lang_en_us::T_Note_QCWarn,
     lang_en_us::T_Temp_SaveLastWrkDescr
@@ -183,6 +193,7 @@ static constexpr std::array<const char *, MENU_TIMEOUTS_CFG_SIZE> menu_TimeoutOp
 static constexpr std::array<const char *, MENU_PWR_CONTROL_CFG_SIZE> menu_PwrControlOpts = {
     lang_en_us::T_PwrPD,
     lang_en_us::T_PwrQC,
+    lang_en_us::T_PwrRamp,
     lang_en_us::T_return
 };
 

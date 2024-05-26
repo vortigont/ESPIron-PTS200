@@ -281,7 +281,7 @@ void VinSensor::_runner(){
   voltage = voltage / 4 * 31.3f;
 
   // log and publish Vin value
-  LOGD(T_ADC, printf, "Vin: %u mV\n", voltage);
+  ADC_LOGV(T_ADC, printf, "Vin: %u mV\n", voltage);
   EVT_POST_DATA(SENSOR_DATA, e2int(evt::iron_t::vin), &voltage, sizeof(voltage));
 
 

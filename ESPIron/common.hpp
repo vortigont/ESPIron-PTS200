@@ -25,8 +25,8 @@ enum class ironState_t {
     suspend,      // hibernation mode
     boost,        // heater temperature is increased for a short period of time
     setup,        // iron is configuration mode, i.e. working with screen menu, heater switches off
-    notip         // tip is missing or failed
-
+    notip,        // tip is missing or failed
+    ramping       // power ramp in progress
 };
 
 // working temperature values
