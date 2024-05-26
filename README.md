@@ -71,11 +71,11 @@ Menu navigation demo capture.
 
 ### Features
 
-### QC Trigger
-QC trigger is an experimental feature. Since QC trigger uses same lines as USB data, those function co-exist pretty bad together. Due to lack of design schematics and documentaion it is diffecult to implement it properly. When QC is activated __no other__ USB operation is possible, __including firmware download__! It also affects system message output to `Serial` line which migh result in UI slownes or freezes.
+## QC Trigger
+QC trigger is an __experimental__ feature. Since QC trigger uses same lines as USB data, those function co-exist pretty bad together. Due to lack of design schematics and documentaion it is not easy to implement it properly. When QC is activated __no other__ USB operation is possible, __including firmware download__! It also affects system message output to `Serial` line which migh result in UI slownes or freezes.
 
 > [!NOTE]
-> Do **not** acticate QC-trigger on permanent basis! Do this only when no other PD sources are available and you need to work with USB Type-A powerbanks, or PSUs. Disable it when not needed in configuration menu. On each QC mode change it is required to unplug/replug the Iron!
+> Do **not** activate QC-trigger on permanent basis! Do this only when no other PD sources are available and you need to work with USB Type-A powerbanks, or PSUs. Disable it when not needed in configuration menu. On each QC mode change it is required to unplug/replug the Iron!
 
 
 <!-- 构建方法 -->
