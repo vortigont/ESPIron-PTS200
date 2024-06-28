@@ -45,7 +45,9 @@ WIP:
 
 <!-- https://stackoverflow.com/questions/37349314/is-it-possible-to-add-border-to-image-in-github-markdown -->
 Menu navigation demo capture.
-|<img src="pics/menu_demo01.png?raw=true" alt="Menu demo" />
+|<img src="pics/menu_demo01.png?raw=true" alt="Menu Demo Volt" />
+|-
+|<img src="pics/menu_demo_pwr.png?raw=true" alt="Menu Demo PWR" />
 |-
 
 
