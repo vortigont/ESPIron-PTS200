@@ -11,6 +11,7 @@ If, for some reason, you've bricked your iron or it reboot cyclically (i.e. it i
  - Take your Iron, unplug it from PC USB port, press and hold middle button, while holding the button plug-in the Iron into PC USB port
  - Hold the USB plug in your hand and run command in console `pio run -t upload`
  - Platformio will find the iron and print mesasge like this
+
 ```
 CURRENT: upload_protocol = esptool
 Looking for upload port...
@@ -19,6 +20,7 @@ Auto-detected: /dev/ttyACM0
 Forcing reset using 1200bps open/close on port /dev/ttyACM0
 Waiting for the new upload port...
 ``
+
  - immidiately when you see the message `Waiting for the new upload port...` quickly unplug and replug USB cable to your iron while STILL HOLDING MIDDLE BUTTON
  - You must see a message like this in console `Uploading .pio/build/mypen_qc/firmware.bin`
  - esptool will upload the firmware to the iron
