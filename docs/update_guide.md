@@ -19,7 +19,7 @@ Looking for upload port...
 Auto-detected: /dev/ttyACM0
 Forcing reset using 1200bps open/close on port /dev/ttyACM0
 Waiting for the new upload port...
-``
+```
 
  - immidiately when you see the message `Waiting for the new upload port...` quickly unplug and replug USB cable to your iron while STILL HOLDING MIDDLE BUTTON
  - You must see a message like this in console `Uploading .pio/build/mypen_qc/firmware.bin`
