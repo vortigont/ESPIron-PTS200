@@ -1,0 +1,17 @@
+CONFIG_FREERTOS_HZ=1000
+
+CONFIG_SOC_LEDC_SUPPORTED=y
+
+
+
+CONFIG_SPIRAM=n
+CONFIG_SOC_PCNT_SUPPORTED=n                                                                                                                                   
+CONFIG_SOC_WIFI_SUPPORTED=n
+CONFIG_SOC_TWAI_SUPPORTED=n
+CONFIG_SOC_DAC_SUPPORTED=n
+
+CONFIG_ESP32_WIFI_ENABLED=n
+CONFIG_LWIP_IPV4=n
+CONFIG_LWIP_IPV6=n
+
+CONFIG_MBEDTLS_TLS_DISABLED=y
