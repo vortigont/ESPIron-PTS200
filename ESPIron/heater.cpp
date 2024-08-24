@@ -185,8 +185,9 @@ void TipHeater::_heaterControl(){
   TickType_t delay_time = measure_delay_ticks;
   for (;;){
     // sleep to accomodate specified measuring rate
-    // if task has been delayed, than we can't keep up with desired measure rate, let's give other tasks time to run anyway
-    if ( xTaskDelayUntil( &xLastWakeTime, delay_time ) ) taskYIELD();
+    if ( xTaskDelayUntil( &xLastWakeTime, delay_time ) != pdTRUE ) continue;
+    // if task has not been delayed actually, than we can't keep up with desired measure rate, or thread was suspended from the outside
+    // I can skip this measurment cycle
 
     switch (_state){
       case HeaterState_t::notip :
@@ -197,8 +198,6 @@ void TipHeater::_heaterControl(){
       case HeaterState_t::active : {
         // use while to avoid concurency issues with hw fader interrupt
         while (ledc_get_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel)){
-          // reset run time (need to avoid extra consecutive runs with xTaskDelayUntil if thread was suspended from the outside)
-          xLastWakeTime = xTaskGetTickCount();
           // shut off heater in order to measure temperature 关闭加热器以测量温度
           ledc_set_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel, 0);
           ledc_update_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel);
