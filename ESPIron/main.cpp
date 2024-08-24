@@ -22,9 +22,9 @@ TipHeater heater(HEATER_PIN, HEATER_CHANNEL, HEATER_INVERT);
 
 // acceleration sensor
 GyroSensor accel;
+#endif  // DEVELOP_MODE
 // input voltage sensor
 VinSensor vin;
-#endif  // DEVELOP_MODE
 
 // Default value can be changed by user and stored in EEPROM
 // 用户可以更改并存储在EEPROM中的默认值
@@ -35,12 +35,11 @@ bool MSC_Updating_Flag = false;
 
 
 
-
 // *** Arduino setup ***
 void setup() {
 
   // tip sensor pin
-  pinMode(SENSOR_PIN, INPUT_PULLUP);
+  pinMode(TIP_ADC_SENSOR_PIN, INPUT_PULLUP);
   // buzzer in
   pinMode(BUZZER_PIN, OUTPUT);
 
@@ -84,15 +83,6 @@ void setup() {
   // event bus sniffer
   //evt::debug();
 
-/*
-  // if all 3 buttons are pressed on boot, reset EEPROM configuration to defaults
-  // this does not makes much sense 'cause pressed gpio0 will put MCU into fash mode
-  if (digitalRead(BUTTON_P_PIN) == LOW && digitalRead(BUTTON_N_PIN) == LOW &&
-      digitalRead(BUTTON_PIN) == HIGH) {
-    write_default_EEPROM();
-  }
-*/
-
   // Initialize Iron Controller
   espIron.init();
 
@@ -107,9 +97,9 @@ void setup() {
   // initialize acceleration sensor
   accel.init();
 
+#endif  //DEVELOP_MODE
   // init voltage sensor
   vin.init();
-#endif  //DEVELOP_MODE
 
   // initialize HID (buttons controls and navigation, screen)
   LOGI(T_IRON, println, "Init HID");

@@ -2,7 +2,6 @@
 #include <array>
 #include "common.hpp"
 #include "SparkFun_LIS2DH12.h"          // https://github.com/sparkfun/SparkFun_LIS2DH12_Arduino_Library
-#include "ESP32AnalogRead.h"            // https://github.com/madhephaestus/ESP32AnalogRead
 #include "evtloop.hpp"
 #include "freertos/timers.h"
 
@@ -110,9 +109,6 @@ class VinSensor {
   TimerHandle_t _tmr_runner{nullptr};
 
   //esp_event_handler_instance_t _evt_set_handler = nullptr;
-
-  // ADC Calibrated Reader
-  ESP32AnalogRead adc_vin;
 
   // events handler
   void _eventHandler(esp_event_base_t base, int32_t id, void* data);

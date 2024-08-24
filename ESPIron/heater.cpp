@@ -2,7 +2,6 @@
 #include "const.h"
 #include "evtloop.hpp"
 #include "heater.hpp"
-//#include "main.h"
 #include "log.h"
 
 #define HEATER_TASK_PRIO          tskIDLE_PRIORITY+1    // task priority
@@ -19,7 +18,7 @@
 #define HEATER_LEDC_FREQUENCY     HEATER_FREQ
 #define HEATER_LEDC_RAMPUP_TIME   3000                  // time duration to fade in-for PWM ramping, ms
 
-#define HEATER_OPAMP_STABILIZE_MS 5                     // how long to wait after disabling PWM to let OpAmp stabilize
+#define HEATER_OPAMP_STABILIZE_MS 8                     // how long to wait after disabling PWM to let OpAmp stabilize
 
 #define HEATER_ADC_SAMPLES        8                     // number of ADC reads to averate tip tempearture
 
@@ -33,6 +32,12 @@ constexpr TickType_t measure_delay_ticks = pdMS_TO_TICKS(1000 / HEATER_MEASURE_R
 constexpr TickType_t long_measure_delay_ticks = pdMS_TO_TICKS(500);
 // idle interval between temp measurments
 constexpr TickType_t idle_delay_ticks = pdMS_TO_TICKS(1000);
+
+// a simple constrain function
+template<typename T>
+T clamp(T value, T min, T max){
+  return (value < min)? min : (value > max)? max : value;
+}
 
 TipHeater::~TipHeater(){
   // unsubscribe from event bus
@@ -50,8 +55,6 @@ TipHeater::~TipHeater(){
 }
 
 void TipHeater::init(){
-  adc_sensor.attach(SENSOR_PIN);
-
   // set PID output range
   _pid.setOutputRange(0, 1<<HEATER_RES);
 
@@ -194,13 +197,13 @@ void TipHeater::_heaterControl(){
       case HeaterState_t::active : {
         // use while to avoid concurency issues with hw fader interrupt
         while (ledc_get_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel)){
+          // reset run time (need to avoid extra consecutive runs with xTaskDelayUntil if thread was suspended from the outside)
+          xLastWakeTime = xTaskGetTickCount();
           // shut off heater in order to measure temperature 关闭加热器以测量温度
           ledc_set_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel, 0);
           ledc_update_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel);
           // idle while OpAmp stabilizes
           vTaskDelay(pdMS_TO_TICKS(HEATER_OPAMP_STABILIZE_MS));
-          // reset run time (need to avoid extra consecutive runs with xTaskDelayUntil if thread was suspended from the outside)
-          xLastWakeTime = xTaskGetTickCount();
         }
         break;
       }
@@ -229,7 +232,7 @@ void TipHeater::_heaterControl(){
 
     // check if we've get the Tip back
     if (_state == HeaterState_t::notip && t < TEMP_NOTIP){
-      _state = HeaterState_t::inactive;
+      _state = HeaterState_t::active;
       EVT_POST(SENSOR_DATA, e2int(evt::iron_t::tipInsert));
       LOGW(T_HEAT, println, "Iron Tip inserted");
       continue;
@@ -254,7 +257,7 @@ void TipHeater::_heaterControl(){
     // note: this is ugly external function, I will rework it later
     //_t.calibrated = calculateTemp(_t.avg);
     _t.calibrated = _t.avg;
-    ADC_LOGD(printf, "avg T: %5.1f, cal T: %d, tgt T:%d\n", _t.avg, _t.calibrated, _t.target);
+    ADC_LOGV(T_ADC, printf, "avg T: %5.1f, cal T: %d, tgt T:%d\n", _t.avg, _t.calibrated, _t.target);
     EVT_POST_DATA(SENSOR_DATA, e2int(evt::iron_t::tiptemp), &_t.calibrated, sizeof(_t.calibrated));
 
     // if PID algo should be engaged
@@ -271,7 +274,7 @@ void TipHeater::_heaterControl(){
 
     ledc_set_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel,  _pwm.duty);
     ledc_update_duty(HEATER_LEDC_SPEEDMODE, _pwm.channel);
-    PWM_LOGV(printf, "Duty:%u\n",  _pwm.duty);
+    PWM_LOGV(T_HEAT, printf, "Duty:%u\n",  _pwm.duty);
   }
   // Task must self-terminate (if ever)
   vTaskDelete(NULL);
@@ -326,7 +329,7 @@ bool TipHeater::_cb_ledc_fade_end_event(const ledc_cb_param_t *param, void *arg)
   // do not care what was the event, I need to unblock heater control anyway
   // if (param->event == LEDC_FADE_END_EVT)
 
-  BaseType_t task_awoken;
+  BaseType_t task_awoken{0};
   // notify that rampUp has been complete
   EVT_POST_ISR(IRON_NOTIFY, e2int(evt::iron_t::statePWRRampCmplt), &task_awoken);
   task_awoken |= xTaskResumeFromISR(static_cast<TipHeater*>(arg)->_task_hndlr);
@@ -337,10 +340,10 @@ bool TipHeater::_cb_ledc_fade_end_event(const ledc_cb_param_t *param, void *arg)
 // 对32个ADC读数进行平均以降噪
 //  VP+_Ru = 100k, Rd_GND = 1K
 float TipHeater::_denoiseADC(){
-  std::array<uint32_t, 8> samples;
+  std::array<uint32_t, HEATER_ADC_SAMPLES> samples;
 
   for (auto &i : samples){
-    i = adc_sensor.readMiliVolts();
+    i = analogReadMilliVolts(TIP_ADC_SENSOR_PIN);
     // value = constrain(0.4432 * raw_adc + 29.665, 20, 1000);
   }
 
@@ -349,9 +352,7 @@ float TipHeater::_denoiseADC(){
   for (size_t i = 0; i < samples.size(); ++i){
     for (size_t j = i + 1; j < samples.size(); ++j){
       if (samples[i] > samples[j]) {
-        auto temp = samples[i];
-        samples[i] = samples[j];
-        samples[j] = temp;
+        std::swap(samples[i], samples[j]);
       }
     }
   }
@@ -361,10 +362,11 @@ float TipHeater::_denoiseADC(){
   for (uint8_t i = 2; i < 6; i++) {
     result += samples[i];
   }
+  result /= 4;
 
   // convert mV to Celsius
-  auto t = constrain(0.5378 * result / 4 + 6.3959, 20.0, 1000.0);
-  ADC_LOGV(printf, "avg mV:%u / Temp C:%6.1f\n", result / 4, t);
+  float t = clamp(0.5378 * result + 6.3959, 20.0, 1000.0);
+  ADC_LOGV(T_ADC, printf, "avg mV:%u / Temp C:%6.1f\n", result, t);
 ////  resultArray[i] = constrain(0.5378 * raw_adc + 6.3959, 20, 1000); // y = 0.5378x + 6.3959;
   return t;
 }

@@ -2,6 +2,7 @@
 LOG macro will enable/disable logs to serial depending on LAMP_DEBUG build-time flag
 */
 #pragma once
+#include "Arduino.h"
 
 static constexpr const char* S_V = "V: ";
 static constexpr const char* S_D = "D: ";
@@ -69,25 +70,25 @@ static constexpr const char* S_E = "E: ";
 
 // Per app macros
 #if defined(ADC_DEBUG_LEVEL) && ADC_DEBUG_LEVEL > 3
-	#define ADC_LOGD(func, ...) PTS200_DEBUG_PORT.print(S_D); PTS200_DEBUG_PORT.print(T_ADC); PTS200_DEBUG_PORT.print((char)0x9); PTS200_DEBUG_PORT.func(__VA_ARGS__)
+	#define ADC_LOGD(tag, func, ...) PTS200_DEBUG_PORT.print(S_D); PTS200_DEBUG_PORT.print(T_ADC); PTS200_DEBUG_PORT.print((char)0x9); PTS200_DEBUG_PORT.func(__VA_ARGS__)
 #else
 	#define ADC_LOGD(...)
 #endif
 
 #if defined(ADC_DEBUG_LEVEL) && ADC_DEBUG_LEVEL == 5
-	#define ADC_LOGV(func, ...) PTS200_DEBUG_PORT.print(S_V); PTS200_DEBUG_PORT.print(T_ADC); PTS200_DEBUG_PORT.print((char)0x9); PTS200_DEBUG_PORT.func(__VA_ARGS__)
+	#define ADC_LOGV(tag, func, ...) PTS200_DEBUG_PORT.print(S_V); PTS200_DEBUG_PORT.print(T_ADC); PTS200_DEBUG_PORT.print((char)0x9); PTS200_DEBUG_PORT.func(__VA_ARGS__)
 #else
 	#define ADC_LOGV(...)
 #endif
 
 #if defined(CTRL_DEBUG_LEVEL) && CTRL_DEBUG_LEVEL == 5
-	#define CTRL_LOGV(func, ...) PTS200_DEBUG_PORT.print(S_V); PTS200_DEBUG_PORT.print(T_CTRL); PTS200_DEBUG_PORT.print((char)0x9); PTS200_DEBUG_PORT.func(__VA_ARGS__)
+	#define CTRL_LOGV(tag, func, ...) PTS200_DEBUG_PORT.print(S_V); PTS200_DEBUG_PORT.print(T_CTRL); PTS200_DEBUG_PORT.print((char)0x9); PTS200_DEBUG_PORT.func(__VA_ARGS__)
 #else
 	#define CTRL_LOGV(...)
 #endif
 
 #if defined(PWM_DEBUG_LEVEL) && PWM_DEBUG_LEVEL == 5
-	#define PWM_LOGV(func, ...) PTS200_DEBUG_PORT.print(S_V); PTS200_DEBUG_PORT.print(T_PWM); PTS200_DEBUG_PORT.print((char)0x9); PTS200_DEBUG_PORT.func(__VA_ARGS__)
+	#define PWM_LOGV(tag, func, ...) PTS200_DEBUG_PORT.print(S_V); PTS200_DEBUG_PORT.print(T_PWM); PTS200_DEBUG_PORT.print((char)0x9); PTS200_DEBUG_PORT.func(__VA_ARGS__)
 #else
 	#define PWM_LOGV(...)
 #endif

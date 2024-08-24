@@ -599,12 +599,12 @@ void MuiMenu::_evt_encoder(ESPButton::event_t e, const EventMsg* m){
 void MuiMenu::drawScreen(){
   if (!_rr) return;
 
-  Serial.printf("st:%lu\n", millis());
+  //Serial.printf("st:%lu\n", millis());
   u8g2.clearBuffer();
   // call Mui renderer
   render();
   u8g2.sendBuffer();
-  Serial.printf("en:%lu\n", millis());
+  //Serial.printf("en:%lu\n", millis());
   // take a screenshot
   //u8g2.writeBufferXBM(Serial);
   _rr = false;
@@ -1258,9 +1258,14 @@ void ViSet_PwrSetup::_qc_voltage_step(bool inc){
 }
 
 
-// *****************************
-// *** MUI entities
+//  **************************************
+//  *** USB MSC functions              ***
 
+#ifdef CONFIG_TINYUSB_MSC_ENABLED
+void ViSet_USBMSC_attach_fwupdater(){
+
+}
+#endif // CONFIG_TINYUSB_MSC_ENABLED
 
 
 

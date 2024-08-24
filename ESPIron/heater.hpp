@@ -3,7 +3,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/ledc.h"
-#include <ESP32AnalogRead.h>
 #include "FastPID.h"
 
 #define HEATER_MEASURE_RATE       10                    // Tip temperature measuring rate in working mode, Hz
@@ -55,9 +54,6 @@ class TipHeater {
   // event handlers
   esp_event_handler_instance_t _evt_cmd_handler = nullptr;
   esp_event_handler_instance_t _evt_ntf_handler = nullptr;
-
-
-  ESP32AnalogRead adc_sensor;
 
   // Specify variable pointers and initial PID tuning parameters
   // 指定变量指针和初始PID调优参数

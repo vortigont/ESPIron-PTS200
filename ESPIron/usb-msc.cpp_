@@ -1,0 +1,14 @@
+/*
+    This file is a part of ESPIron-PTS200 project
+    https://github.com/vortigont/ESPIron-PTS200
+
+    Copyright © 2024 Emil Muratov (vortigont)
+
+    ESPIron-PTS200 is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+*/
+
+#include "msc.hpp"
+

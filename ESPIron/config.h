@@ -14,14 +14,14 @@
 #define SCREEN_OFFSET     2
 
 // Pins
-#define SENSOR_PIN        1     // tip temperature sense 烙铁头温感
-#define VIN_PIN           6     // input voltage sense 检测输入电压
-#define BUZZER_PIN        3     // buzzer 蜂鸣器
-#define BUTTON_ACTION     GPIO_NUM_0     // middle push-button
-#define BUTTON_INCR       GPIO_NUM_2     // incrementer “+” push-button
-#define BUTTON_DECR       GPIO_NUM_4     // decrementer “-” push-button
-#define HEATER_PIN        GPIO_NUM_5     // heater MOSFET PWM control 加热器MOSFET PWM控制
-#define SH1107_RST_PIN    7     // display reset pin
+#define TIP_ADC_SENSOR_PIN  1               // tip temperature sense 烙铁头温感
+#define VIN_PIN             6               // input voltage sense 检测输入电压
+#define BUZZER_PIN          3               // buzzer 蜂鸣器
+#define BUTTON_ACTION       GPIO_NUM_0      // middle push-button
+#define BUTTON_INCR         GPIO_NUM_2      // incrementer “+” push-button
+#define BUTTON_DECR         GPIO_NUM_4      // decrementer “-” push-button
+#define HEATER_PIN          GPIO_NUM_5      // heater MOSFET PWM control 加热器MOSFET PWM控制
+#define SH1107_RST_PIN      7               // display reset pin
 
 // CH224K USB PD chip pins connection
 // https://components101.com/sites/default/files/component_datasheet/WCH_CH224K_ENG.pdf
