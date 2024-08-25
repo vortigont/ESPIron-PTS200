@@ -121,7 +121,7 @@ public:
    * 
    * @param t 
    */
-  void setTargetTemp(int32_t t){ _t.target = t; };
+  void setTargetTemp(int32_t t);
 
   /**
    * @brief Get the Target heater temperature

@@ -94,7 +94,6 @@ void TipHeater::_evt_picker(esp_event_base_t base, int32_t id, void* data){
     case evt::iron_t::heaterTargetT : {
       // change heater temp
       setTargetTemp(*reinterpret_cast<int32_t*>(data));
-      LOGD(T_HEAT, printf, "set target T:%d\n", _t.target);
       return;
     }
 
@@ -127,6 +126,10 @@ void TipHeater::_evt_picker(esp_event_base_t base, int32_t id, void* data){
   }
 }
 
+void TipHeater::setTargetTemp(int32_t t){
+  _t.target = t;
+  LOGD(T_HEAT, printf, "set target T:%d\n", _t.target);
+};
 
 void TipHeater::_start_runner(){
   // Prepare and then apply the LEDC PWM timer configuration

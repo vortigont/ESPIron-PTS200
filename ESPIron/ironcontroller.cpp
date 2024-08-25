@@ -142,7 +142,7 @@ void IronController::_mode_switcher(){
         _state = ironState_t::standby;
         LOGI(T_CTRL, printf, "Engage standby mode due to sleep timeout of %u ms. Temp:%u\n", _timeout.standby, _temp.standby);
         // switch heater temperature to standby value
-        EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::heaterTargetT), &_temp.standby, sizeof(_temp.standby));
+        EVT_POST_DATA(IRON_HEATER, e2int(iron_t::heaterTargetT), &_temp.standby, sizeof(_temp.standby));
         // notify other componets that we are switching to 'standby' mode
         EVT_POST(IRON_NOTIFY, e2int(iron_t::stateStandby));
       }
@@ -156,13 +156,18 @@ void IronController::_mode_switcher(){
         LOGI(T_CTRL, printf, "Engage idle mode due to idle timeout of %u ms\n", _timeout.idle);
         // notify other componets that we are switching to 'idle' mode
         EVT_POST(IRON_NOTIFY, e2int(iron_t::stateIdle));
+        // disable heater
+        EVT_POST(IRON_HEATER, e2int(iron_t::heaterDisable));
       } else if (pdTICKS_TO_MS(xTaskGetTickCount()) - pdTICKS_TO_MS(_xTicks.motion) < _timeout.standby){
         // standby cancelled
         _state = ironState_t::working;
         LOGI(T_CTRL, println, "cancel Standby mode");
         // notify other componets that we are switching to 'work' mode
         EVT_POST(IRON_NOTIFY, e2int(iron_t::stateWorking));
-        EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::heaterTargetT), &_temp.working, sizeof(_temp.working));
+        // switch on heater
+        EVT_POST(IRON_HEATER, e2int(iron_t::heaterEnable));
+        // set target T for heater
+        EVT_POST_DATA(IRON_HEATER, e2int(iron_t::heaterTargetT), &_temp.working, sizeof(_temp.working));
       }
       return;
     }
@@ -197,6 +202,8 @@ void IronController::_mode_switcher(){
         // notify other componets that we are switching to 'working' mode
         EVT_POST(IRON_NOTIFY, e2int(iron_t::stateWorking));
         LOGI(T_CTRL, printf, "Engage work mode due to boost timeout of %u ms\n", _timeout.boost);
+        // set target T for heater
+        EVT_POST_DATA(IRON_HEATER, e2int(iron_t::heaterTargetT), &_temp.working, sizeof(_temp.working));
       } else {
         // send notification with time left till boost is disabled (in seconds)
         unsigned time_left = _timeout.boost - t; 
@@ -287,7 +294,7 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
           EVT_POST_DATA(IRON_NOTIFY, e2int(iron_t::stateBoost), &_timeout.boost, sizeof(_timeout.boost));
           // set heater to boost temperature
           int32_t t = _temp.working + _temp.boost;
-          EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::heaterTargetT), &t, sizeof(t));
+          EVT_POST_DATA(IRON_HEATER, e2int(iron_t::heaterTargetT), &t, sizeof(t));
           _xTicks.boost = xTaskGetTickCount();
           break;
         }
@@ -298,7 +305,7 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
           // notify other components
           LOGI(T_CTRL, println, "switch to Work mode");
           EVT_POST(IRON_NOTIFY, e2int(iron_t::stateWorking));
-          EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::heaterTargetT), &_temp.working, sizeof(_temp.working));
+          EVT_POST_DATA(IRON_HEATER, e2int(iron_t::heaterTargetT), &_temp.working, sizeof(_temp.working));
           break;
       }
       break;
@@ -327,7 +334,7 @@ void IronController::_evt_commands(esp_event_base_t base, int32_t id, void* data
           nvs_blob_write(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
       }
       if (_state == ironState_t::working)
-        EVT_POST_DATA(IRON_SET_EVT, e2int(iron_t::heaterTargetT), &_temp.working, sizeof(_temp.working));
+        EVT_POST_DATA(IRON_HEATER, e2int(iron_t::heaterTargetT), &_temp.working, sizeof(_temp.working));
       break;
     }
 
