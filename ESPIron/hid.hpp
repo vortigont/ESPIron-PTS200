@@ -17,6 +17,7 @@
 #include "espasyncbutton.hpp"
 #include "muipp_u8g2.hpp"
 #include "lang/lang_en_us.h"
+#include "FirmwareMSC.h"
 
 
 /**
@@ -356,6 +357,27 @@ public:
   ViSet_PwrSetup(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder);
   // d-tor
   ~ViSet_PwrSetup();
+
+};
+
+class ViSet_USBMSC : public MuiMenu {
+
+#if CONFIG_TINYUSB_MSC_ENABLED
+  std::unique_ptr< FirmwareMSC > _fwMSC;
+#endif  //CONFIG_TINYUSB_MSC_ENABLED
+
+  // menu builder function
+  void _buildMenu();
+
+#ifdef CONFIG_TINYUSB_MSC_ENABLED
+  void _attach_fwupdater();
+#endif // CONFIG_TINYUSB_MSC_ENABLED
+
+public:
+  // c-tor
+  ViSet_USBMSC(GPIOButton<ESPEventPolicy> &button, PseudoRotaryEncoder &encoder);
+  // d-tor
+  ~ViSet_USBMSC();
 
 };
 

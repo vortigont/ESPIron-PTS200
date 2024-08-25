@@ -232,8 +232,6 @@ void GyroSensor::_temperature_poll(){
 
 void VinSensor::init(){
   LOGI(T_Sensor, println, "Init Voltage sensor");
-  // input voltage pin ADC
-  adc_vin.attach(VIN_PIN);
 
   // start voltage polling
   if (!_tmr_runner){
@@ -275,15 +273,14 @@ VinSensor::~VinSensor(){
 void VinSensor::_runner(){
   uint32_t voltage = 0;
 
-  for (uint8_t i = 0; i < 4; i++) {  // get 32 readings 得到32个读数
-    voltage += adc_vin.readMiliVolts();
+  for (uint32_t i = 0; i < 4; i++) {  // get 32 readings 得到32个读数
+    voltage += analogReadMilliVolts(VIN_PIN);
   }
-  voltage = voltage / 4 * 31.3f;
+  voltage = voltage / 4 * 31.3f;    // not sure where this 31.3 comes from, need real schematics of this Iron
 
-  // log and publish Vin value
-  ADC_LOGV(T_ADC, printf, "Vin: %u mV\n", voltage);
+
+  ADC_LOGV(T_ADC, printf, "Vin: %d mV\n", voltage);
   EVT_POST_DATA(SENSOR_DATA, e2int(evt::iron_t::vin), &voltage, sizeof(voltage));
-
 
   //  some calibration calc
   //  // VIN_Ru = 100k, Rd_GND = 3.3K

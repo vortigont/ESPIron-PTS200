@@ -325,6 +325,9 @@ ViSet_MainScreen::ViSet_MainScreen(GPIOButton<ESPEventPolicy> &button, PseudoRot
   encdr.setCounter(TEMP_DEFAULT, TEMP_STEP, TEMP_MIN, TEMP_MAX);
   encdr.setMultiplyFactor(2);
 
+  // load configured temperatures
+  nvs_blob_read(T_IRON, T_temperatures, static_cast<void*>(&_temp), sizeof(Temperatures));
+
   // request working temperature from IronController
   EVT_POST(IRON_GET_EVT, e2int(iron_t::workTemp));
 }
@@ -491,12 +494,14 @@ void ViSet_MainScreen::_evt_notify(int32_t id, void* data){
 }
 
 void ViSet_MainScreen::_evt_cmd(int32_t id, void* data){
+/*  not used currently
   switch(static_cast<evt::iron_t>(id)){
     case evt::iron_t::workTemp :
       _temp.working = *reinterpret_cast<int32_t*>(data);
       encdr.setCounter(_temp.working, TEMP_STEP, TEMP_MIN, TEMP_MAX);
     break;
   }
+*/
 }
 
 void ViSet_MainScreen::_evt_state(int32_t id, void* data){
@@ -599,12 +604,12 @@ void MuiMenu::_evt_encoder(ESPButton::event_t e, const EventMsg* m){
 void MuiMenu::drawScreen(){
   if (!_rr) return;
 
-  Serial.printf("st:%lu\n", millis());
+  //Serial.printf("st:%lu\n", millis());
   u8g2.clearBuffer();
   // call Mui renderer
   render();
   u8g2.sendBuffer();
-  Serial.printf("en:%lu\n", millis());
+  //Serial.printf("en:%lu\n", millis());
   // take a screenshot
   //u8g2.writeBufferXBM(Serial);
   _rr = false;
@@ -1258,9 +1263,14 @@ void ViSet_PwrSetup::_qc_voltage_step(bool inc){
 }
 
 
-// *****************************
-// *** MUI entities
+//  **************************************
+//  *** USB MSC functions              ***
 
+#ifdef CONFIG_TINYUSB_MSC_ENABLED
+void ViSet_USBMSC_attach_fwupdater(){
+
+}
+#endif // CONFIG_TINYUSB_MSC_ENABLED
 
 
 
