@@ -4,7 +4,7 @@
 .vscode
 .DS_Store
 .idea
-.lnk
+lnk
 temp/
 platformio_*.ini
 ESPIron/config_*.h
