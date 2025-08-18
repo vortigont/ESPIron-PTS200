@@ -42,7 +42,7 @@ jobs:
           - pts200debug
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: PIP Cache
         id: cache-pip
         uses: actions/cache@v4
