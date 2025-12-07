@@ -59,6 +59,7 @@ U8G2_SH1107_64X128_F_HW_I2C u8g2(U8G2_R1, SH1107_RST_PIN);
 // shortcut type aliases
 using ESPButton::event_t;
 using evt::iron_t;
+using namespace muipp;
 
 //  *********************
 //  ***   IronHID     ***
